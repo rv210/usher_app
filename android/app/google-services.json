@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "384928842494",
+    "project_id": "church-usher-app",
+    "storage_bucket": "church-usher-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:384928842494:android:0c62680350696b92235baf",
+        "android_client_info": {
+          "package_name": "com.usherapp.usher_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXXuz_KW77Y0KWxhSNQe8Wz2GtfKLWnns"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
