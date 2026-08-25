@@ -1,0 +1,50 @@
+workflows:
+  ios-testflight:
+    name: Build & Publish to TestFlight
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - app_store_connect
+    triggering:
+      events:
+        - push
+      branches:
+        - main
+        - master
+    scripts:
+      - name: Set up .env.local for secrets
+        script: |
+          echo "FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY" >> .env.local
+          echo "FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID" >> .env.local
+          echo "FIREBASE_ANDROID_API_KEY=$FIREBASE_ANDROID_API_KEY" >> .env.local
+          echo "FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID" >> .env.local
+          echo "FIREBASE_IOS_API_KEY=$FIREBASE_IOS_API_KEY" >> .env.local
+          echo "FIREBASE_IOS_APP_ID=$FIREBASE_IOS_APP_ID" >> .env.local
+          echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" >> .env.local
+          echo "FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" >> .env.local
+          echo "FIREBASE_AUTH_DOMAIN=$FIREBASE_AUTH_DOMAIN" >> .env.local
+          echo "FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" >> .env.local
+      - name: Fetch Flutter dependencies
+        script: |
+          flutter pub get
+      - name: Set up iOS code signing with Codemagic
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "com.usherapp.usherApp" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
