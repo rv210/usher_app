@@ -1,11 +1,11 @@
 {
-    "name": "usher_app",
-    "short_name": "usher_app",
+    "name": "Guardians Of The Gate",
+    "short_name": "Guardians Of The Gate",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#14100E",
     "theme_color": "#8B1E3F",
-    "description": "A new Flutter project.",
+    "description": "Guardians Of The Gate - Ministry Usher Operational Management Hub",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
