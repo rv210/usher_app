@@ -548,8 +548,8 @@ class _DashboardViewState extends State<DashboardView> {
                                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                   final dep = sortedRoster[index];
-                                  final roleLower = dep.role.toLowerCase();
-                                  final isLead = roleLower.contains('lead usher') || (roleLower.contains('lead') && !roleLower.contains('head'));
+                                  final roleLower = dep.role.toLowerCase().trim();
+                                  final isLead = roleLower == 'lead usher' || roleLower == 'lead' || roleLower == 'lead usher (sunday lead)';
 
                                   return DribbbleGlassContainer(
                                     borderRadius: 18,
@@ -558,75 +558,78 @@ class _DashboardViewState extends State<DashboardView> {
                                     backgroundColor: isLead
                                         ? Theme.of(context).primaryColor.withValues(alpha: isDark ? 0.15 : 0.08)
                                         : null,
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            gradient: isLead ? context.activeGradient : null,
-                                            color: isLead ? null : Theme.of(context).primaryColor.withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(14),
-                                            boxShadow: isLead
-                                                ? [
-                                                    BoxShadow(
-                                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
-                                                      blurRadius: 8,
-                                                      offset: const Offset(0, 3),
-                                                    ),
-                                                  ]
-                                                : null,
-                                          ),
-                                          child: Icon(
-                                            isLead ? LucideIcons.crown : LucideIcons.mapPin,
-                                            color: isLead ? Colors.white : Theme.of(context).primaryColor,
-                                            size: 20,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      dep.station,
-                                                      style: GoogleFonts.outfit(
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: context.textPrimaryColor,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  if (isLead) ...[
-                                                    const SizedBox(width: 6),
-                                                    DribbblePillBadge(
-                                                      label: "LEAD",
-                                                      icon: LucideIcons.crown,
-                                                      color: Theme.of(context).primaryColor,
-                                                    ),
-                                                  ],
-                                                ],
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                gradient: isLead ? context.activeGradient : null,
+                                                color: isLead ? null : Theme.of(context).primaryColor.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(12),
+                                                boxShadow: isLead
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 3),
+                                                        ),
+                                                      ]
+                                                    : null,
                                               ),
-                                              const SizedBox(height: 3),
-                                              Text(
-                                                "${dep.usherName} • ${dep.role}",
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 13,
-                                                  fontWeight: isLead ? FontWeight.bold : FontWeight.normal,
-                                                  color: isLead
-                                                      ? Theme.of(context).primaryColor
-                                                      : context.textSecondaryColor,
+                                              child: Icon(
+                                                isLead ? LucideIcons.crown : LucideIcons.mapPin,
+                                                color: isLead ? Colors.white : Theme.of(context).primaryColor,
+                                                size: 18,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                dep.station,
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: context.textPrimaryColor,
                                                 ),
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (isLead) ...[
+                                                  DribbblePillBadge(
+                                                    label: "LEAD",
+                                                    icon: LucideIcons.crown,
+                                                    color: Theme.of(context).primaryColor,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                ],
+                                                DribbblePillBadge(
+                                                  label: dep.verified ? "Confirmed" : "Pending",
+                                                  color: dep.verified ? AppColors.success : AppColors.amber,
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 8),
-                                        DribbblePillBadge(
-                                          label: dep.verified ? "Confirmed" : "Pending",
-                                          color: dep.verified ? AppColors.success : AppColors.amber,
+                                        const SizedBox(height: 8),
+                                        Padding(
+                                          padding: const EdgeInsets.only(left: 40),
+                                          child: Text(
+                                            "${dep.usherName} • ${dep.role}",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              fontWeight: isLead ? FontWeight.bold : FontWeight.normal,
+                                              color: isLead
+                                                  ? Theme.of(context).primaryColor
+                                                  : context.textSecondaryColor,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
