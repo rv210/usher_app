@@ -1114,38 +1114,60 @@ class FirebaseService extends ChangeNotifier {
       } catch (_) {}
     }
 
+    final Map<String, CommsMessage> commsCache = {};
     for (var colName in ['communications', 'comms_messages']) {
       try {
-        _db.collection(colName).orderBy('createdAt', descending: false).snapshots().listen((snap) {
-          final list = snap.docs.map((d) => CommsMessage.fromMap(d.data(), d.id)).toList();
-          if (list.isNotEmpty || _commsMessages.isEmpty) {
-            _commsMessages = list;
-            notifyListeners();
+        _db.collection(colName).snapshots().listen((snap) {
+          for (var change in snap.docChanges) {
+            if (change.type == DocumentChangeType.removed) {
+              commsCache.remove(change.doc.id);
+            } else if (change.doc.data() != null) {
+              final msg = CommsMessage.fromMap(change.doc.data()!, change.doc.id);
+              commsCache[msg.id] = msg;
+            }
           }
+          final list = commsCache.values.toList()
+            ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          _commsMessages = list;
+          notifyListeners();
         }, onError: (_) {});
       } catch (_) {}
     }
 
+    final Map<String, AttendanceLogEntry> attendanceCache = {};
     for (var colName in ['attendance', 'attendance_logs']) {
       try {
-        _db.collection(colName).orderBy('createdAt', descending: true).snapshots().listen((snap) {
-          final list = snap.docs.map((d) => AttendanceLogEntry.fromMap(d.data(), d.id)).toList();
-          if (list.isNotEmpty || _attendanceLogs.isEmpty) {
-            _attendanceLogs = list;
-            notifyListeners();
+        _db.collection(colName).snapshots().listen((snap) {
+          for (var change in snap.docChanges) {
+            if (change.type == DocumentChangeType.removed) {
+              attendanceCache.remove(change.doc.id);
+            } else if (change.doc.data() != null) {
+              final entry = AttendanceLogEntry.fromMap(change.doc.data()!, change.doc.id);
+              attendanceCache[entry.id] = entry;
+            }
           }
+          final list = attendanceCache.values.toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _attendanceLogs = list;
+          notifyListeners();
         }, onError: (_) {});
       } catch (_) {}
     }
 
+    final Map<String, Deployment> deploymentCache = {};
     for (var colName in ['deployment_publishes', 'deployments']) {
       try {
         _db.collection(colName).snapshots().listen((snap) {
-          final list = snap.docs.map((d) => Deployment.fromMap(d.data(), d.id)).toList();
-          if (list.isNotEmpty || _deployments.isEmpty) {
-            _deployments = list;
-            notifyListeners();
+          for (var change in snap.docChanges) {
+            if (change.type == DocumentChangeType.removed) {
+              deploymentCache.remove(change.doc.id);
+            } else if (change.doc.data() != null) {
+              final dep = Deployment.fromMap(change.doc.data()!, change.doc.id);
+              deploymentCache[dep.id] = dep;
+            }
           }
+          _deployments = deploymentCache.values.toList();
+          notifyListeners();
         }, onError: (_) {});
       } catch (_) {}
     }
