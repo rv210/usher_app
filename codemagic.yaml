@@ -13,7 +13,6 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.usherapp.usherApp
       groups:
-        - app_store_connect
         - firebase_credentials
     triggering:
       events:
