@@ -29,13 +29,9 @@ void main() async {
   );
 
   try {
-    await dotenv.load(fileName: ".env.local");
+    await dotenv.load(fileName: ".env");
   } catch (_) {
-    try {
-      await dotenv.load(fileName: ".env");
-    } catch (_) {
-      debugPrint("No .env.local or .env file found. Environment variables must be set.");
-    }
+    debugPrint("No .env file loaded.");
   }
 
   try {
