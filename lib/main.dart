@@ -17,7 +17,7 @@ import 'views/database_view.dart';
 import 'views/comms_view.dart';
 import 'views/admin_approval_view.dart';
 import 'views/settings_view.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
