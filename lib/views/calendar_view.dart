@@ -361,7 +361,7 @@ class _CalendarViewState extends State<CalendarView> {
                       itemBuilder: (context, index) {
                         final dep = filteredDeployments[index];
                         final roleLower = dep.role.toLowerCase();
-                        final isLead = roleLower.contains('lead') || roleLower.contains('head') || roleLower.contains('captain') || roleLower.contains('chief');
+                        final isLead = roleLower.contains('lead usher') || (roleLower.contains('lead') && !roleLower.contains('head'));
 
                         return DribbbleGlassContainer(
                           borderRadius: 22,

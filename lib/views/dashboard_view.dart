@@ -443,8 +443,8 @@ class _DashboardViewState extends State<DashboardView> {
 
                     final sortedRoster = List<Deployment>.from(displayList)
                       ..sort((a, b) {
-                        final aLead = a.role.toLowerCase().contains('lead') || a.role.toLowerCase().contains('head');
-                        final bLead = b.role.toLowerCase().contains('lead') || b.role.toLowerCase().contains('head');
+                        final aLead = a.role.toLowerCase().contains('lead usher') || (a.role.toLowerCase().contains('lead') && !a.role.toLowerCase().contains('head'));
+                        final bLead = b.role.toLowerCase().contains('lead usher') || (b.role.toLowerCase().contains('lead') && !b.role.toLowerCase().contains('head'));
                         if (aLead && !bLead) return -1;
                         if (!aLead && bLead) return 1;
                         return 0;
@@ -549,7 +549,7 @@ class _DashboardViewState extends State<DashboardView> {
                                 itemBuilder: (context, index) {
                                   final dep = sortedRoster[index];
                                   final roleLower = dep.role.toLowerCase();
-                                  final isLead = roleLower.contains('lead') || roleLower.contains('head') || roleLower.contains('captain') || roleLower.contains('chief');
+                                  final isLead = roleLower.contains('lead usher') || (roleLower.contains('lead') && !roleLower.contains('head'));
 
                                   return DribbbleGlassContainer(
                                     borderRadius: 18,
