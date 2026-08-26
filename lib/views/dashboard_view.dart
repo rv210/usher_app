@@ -434,7 +434,9 @@ class _DashboardViewState extends State<DashboardView> {
                     final sundayShortStr = DateFormat('MMM d').format(upcomingSunday);
 
                     List<Deployment> sundayDeployments = allDeployments.where((d) {
-                      return d.date == sundayStr || d.date.contains(sundayShortStr) || d.serviceType.toLowerCase().contains('sunday');
+                      return d.date == sundayStr ||
+                             d.date.contains(sundayShortStr) ||
+                             d.date.contains(DateFormat('MM/dd/yyyy').format(upcomingSunday));
                     }).toList();
 
                     final displayList = sundayDeployments.isNotEmpty ? sundayDeployments : allDeployments;
@@ -448,11 +450,23 @@ class _DashboardViewState extends State<DashboardView> {
                         return 0;
                       });
 
+                    String formattedBadgeDate(String rawDate) {
+                      if (rawDate.isEmpty) return DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase();
+                      try {
+                        if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate)) {
+                          final dt = DateTime.parse(rawDate);
+                          return DateFormat('MMM d, yyyy').format(dt).toUpperCase();
+                        }
+                      } catch (_) {}
+                      return rawDate.toUpperCase();
+                    }
+
+                    final String activeRosterDate = sortedRoster.isNotEmpty ? sortedRoster.first.date : '';
                     final displayDateTitle = sundayDeployments.isNotEmpty
                         ? "SUNDAY ROSTER • ${DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase()}"
-                        : (sortedRoster.isNotEmpty && sortedRoster.first.date.isNotEmpty
-                            ? "ROSTER • ${sortedRoster.first.date.toUpperCase()}"
-                            : "NEXT SUNDAY SCHEDULE");
+                        : (activeRosterDate.isNotEmpty
+                            ? "SUNDAY ROSTER • ${formattedBadgeDate(activeRosterDate)}"
+                            : "SUNDAY ROSTER • ${DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase()}");
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
