@@ -7,43 +7,49 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.usherapp.usherApp
       groups:
         - app_store_connect
         - firebase_credentials
+      integrations:
+        app_store_connect: codemagic Guardians # must exactly match the integration name in Codemagic Team settings > Integrations
     triggering:
       events:
         - push
-      branches:
-        - main
-        - master
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+        - pattern: master
+          include: true
+          source: true
     scripts:
-      - name: Set up .env.local for secrets
+      - name: Set up .env for secrets
         script: |
-          echo "FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY" >> .env.local
-          echo "FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID" >> .env.local
-          echo "FIREBASE_ANDROID_API_KEY=$FIREBASE_ANDROID_API_KEY" >> .env.local
-          echo "FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID" >> .env.local
-          echo "FIREBASE_IOS_API_KEY=$FIREBASE_IOS_API_KEY" >> .env.local
-          echo "FIREBASE_IOS_APP_ID=$FIREBASE_IOS_APP_ID" >> .env.local
-          echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" >> .env.local
-          echo "FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" >> .env.local
-          echo "FIREBASE_AUTH_DOMAIN=$FIREBASE_AUTH_DOMAIN" >> .env.local
-          echo "FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" >> .env.local
+          echo "FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY" >> .env
+          echo "FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID" >> .env
+          echo "FIREBASE_ANDROID_API_KEY=$FIREBASE_ANDROID_API_KEY" >> .env
+          echo "FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID" >> .env
+          echo "FIREBASE_IOS_API_KEY=$FIREBASE_IOS_API_KEY" >> .env
+          echo "FIREBASE_IOS_APP_ID=$FIREBASE_IOS_APP_ID" >> .env
+          echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" >> .env
+          echo "FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" >> .env
+          echo "FIREBASE_AUTH_DOMAIN=$FIREBASE_AUTH_DOMAIN" >> .env
+          echo "FIREBASE_STORAGE_BUCKET=$FIREBASE_STORAGE_BUCKET" >> .env
       - name: Fetch Flutter dependencies
         script: |
           flutter pub get
       - name: Set up iOS code signing with Codemagic
         script: |
-          keychain initialize || true
-          app-store-connect fetch-signing-files "com.usherapp.usherApp" --type IOS_APP_STORE --create || true
-          keychain add-certificates || true
-          xcode-project use-profiles || true
+          xcode-project use-profiles
       - name: Build Android Release APK
         script: |
           flutter build apk --release
       - name: Build iOS Release IPA
         script: |
-          flutter build ios --release --no-codesign CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO || flutter build ipa --release --no-codesign
+          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
