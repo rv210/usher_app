@@ -3,6 +3,8 @@ workflows:
     name: Build & Distribute (TestFlight & Firebase App Distribution)
     max_build_duration: 30
     instance_type: mac_mini_m1
+    integrations:
+      app_store_connect: codemagic Guardians # must exactly match the integration name in Codemagic Team settings > Integrations
     environment:
       flutter: stable
       xcode: latest
@@ -13,8 +15,6 @@ workflows:
       groups:
         - app_store_connect
         - firebase_credentials
-      integrations:
-        app_store_connect: codemagic Guardians # must exactly match the integration name in Codemagic Team settings > Integrations
     triggering:
       events:
         - push
