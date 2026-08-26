@@ -1,9 +1,14 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
-// Initialize the Firebase app in the service worker by passing the messagingSenderId
+// Initialize the Firebase app in the service worker with full credentials
 firebase.initializeApp({
-  messagingSenderId: "384928842494"
+  apiKey: "AIzaSyB9CayWyFJSQ7qHczNaTr7yzVS0LTnfmbc",
+  authDomain: "church-usher-app.firebaseapp.com",
+  projectId: "church-usher-app",
+  storageBucket: "church-usher-app.firebasestorage.app",
+  messagingSenderId: "384928842494",
+  appId: "1:384928842494:web:fe40cc61f152b172235baf"
 });
 
 const messaging = firebase.messaging();
