@@ -1127,7 +1127,7 @@ class FirebaseService extends ChangeNotifier {
             }
           }
           final list = commsCache.values.toList()
-            ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+            ..sort((a, b) => (a.createdAt ?? '').compareTo(b.createdAt ?? ''));
           _commsMessages = list;
           notifyListeners();
         }, onError: (_) {});

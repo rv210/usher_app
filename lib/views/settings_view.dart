@@ -323,7 +323,7 @@ class _SettingsViewState extends State<SettingsView> {
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(LucideIcons.figma, color: Colors.white, size: 20),
+                      child: const Icon(LucideIcons.palette, color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
