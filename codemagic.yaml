@@ -45,10 +45,10 @@ workflows:
           xcode-project use-profiles
       - name: Build Android Release APK
         script: |
-          flutter build apk --release
+          flutter build apk --release --build-number=$BUILD_NUMBER
       - name: Build iOS Release IPA
         script: |
-          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+          flutter build ipa --release --build-number=$BUILD_NUMBER --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
