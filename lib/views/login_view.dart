@@ -48,6 +48,7 @@ class _LoginViewState extends State<LoginView> {
   }
 
   void _handleSubmit() async {
+    if (!mounted) return;
     setState(() => _errorMessage = null);
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
@@ -56,6 +57,7 @@ class _LoginViewState extends State<LoginView> {
       final password = _passwordController.text.trim();
 
       if (phone.isEmpty || password.isEmpty) {
+        if (!mounted) return;
         setState(() => _errorMessage = "Please enter your phone number and password.");
         return;
       }
@@ -63,6 +65,7 @@ class _LoginViewState extends State<LoginView> {
       try {
         await firebaseService.signInWithPhone(phone, password);
       } catch (e) {
+        if (!mounted) return;
         setState(() => _errorMessage = "Authentication failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
       }
       return;
@@ -72,6 +75,7 @@ class _LoginViewState extends State<LoginView> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       setState(() => _errorMessage = "Please fill in all required fields.");
       return;
     }
@@ -93,6 +97,7 @@ class _LoginViewState extends State<LoginView> {
         await firebaseService.signIn(email, password);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _errorMessage = "Authentication failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
     }
   }
