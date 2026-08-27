@@ -111,13 +111,14 @@ class FirebaseService extends ChangeNotifier {
   int get currentTallyCount => _currentTallyCount;
   String get activeServiceType => _activeServiceType;
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
 
   void initPushNotifications() async {
     try {
-      final settings = await _messaging.requestPermission(
+      if (Firebase.apps.isEmpty) return;
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
@@ -127,7 +128,7 @@ class FirebaseService extends ChangeNotifier {
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
         try {
-          _fcmToken = await _messaging.getToken();
+          _fcmToken = await messaging.getToken();
           debugPrint("FCM Device Token: $_fcmToken");
         } catch (e) {
           debugPrint("FCM Token fetch info: $e");

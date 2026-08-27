@@ -35,11 +35,13 @@ void main() async {
   }
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
   } catch (e) {
-    debugPrint("Firebase already initialized or demo fallback active: $e");
+    debugPrint("Firebase initialization info: $e");
   }
 
   runApp(
