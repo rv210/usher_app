@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/team_member.dart';
 import '../models/deployment.dart';
 import '../models/attendance_log.dart';
@@ -173,7 +174,25 @@ class FirebaseService extends ChangeNotifier {
   }
 
   FirebaseService() {
+    _loadPreferences();
     _initService();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeIndex = prefs.getInt('app_style_theme');
+      if (themeIndex != null && themeIndex >= 0 && themeIndex < AppStyleTheme.values.length) {
+        _activeStyleTheme = AppStyleTheme.values[themeIndex];
+      }
+      final isDark = prefs.getBool('app_theme_is_dark');
+      if (isDark != null) {
+        _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Error loading stored theme preferences: $e");
+    }
   }
 
   void _initService() {
@@ -195,14 +214,32 @@ class FirebaseService extends ChangeNotifier {
     });
   }
 
-  void toggleTheme() {
+  void toggleTheme() async {
     _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('app_theme_is_dark', _themeMode == ThemeMode.dark);
+    } catch (_) {}
+    if (_currentUser != null) {
+      try {
+        await _writeTeamDoc(_currentUser!.uid, {'themeMode': _themeMode.name});
+      } catch (_) {}
+    }
   }
 
-  void setAppStyleTheme(AppStyleTheme styleTheme) {
+  void setAppStyleTheme(AppStyleTheme styleTheme) async {
     _activeStyleTheme = styleTheme;
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('app_style_theme', styleTheme.index);
+    } catch (_) {}
+    if (_currentUser != null) {
+      try {
+        await _writeTeamDoc(_currentUser!.uid, {'preferredTheme': styleTheme.name});
+      } catch (_) {}
+    }
   }
 
   void updateTallyCount(int delta) {
@@ -1003,7 +1040,29 @@ class FirebaseService extends ChangeNotifier {
         doc = await _db.collection('users').doc(uid).get();
       }
       if (doc.exists && doc.data() != null) {
-        _userProfile = TeamMember.fromMap(doc.data()!, doc.id);
+        final data = doc.data()!;
+        _userProfile = TeamMember.fromMap(data, doc.id);
+        if (data.containsKey('preferredTheme') && data['preferredTheme'] is String) {
+          final themeName = data['preferredTheme'] as String;
+          final match = AppStyleTheme.values.where((t) => t.name == themeName).firstOrNull;
+          if (match != null) {
+            _activeStyleTheme = match;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt('app_style_theme', match.index);
+            } catch (_) {}
+          }
+        }
+        if (data.containsKey('themeMode') && data['themeMode'] is String) {
+          final modeStr = data['themeMode'] as String;
+          if (modeStr == 'dark' || modeStr == 'light') {
+            _themeMode = modeStr == 'dark' ? ThemeMode.dark : ThemeMode.light;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('app_theme_is_dark', _themeMode == ThemeMode.dark);
+            } catch (_) {}
+          }
+        }
       } else if (_currentUser != null) {
         final email = _currentUser!.email ?? '';
         final name = (_currentUser!.displayName != null && _currentUser!.displayName!.trim().isNotEmpty)
