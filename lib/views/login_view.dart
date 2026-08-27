@@ -29,6 +29,7 @@ class _LoginViewState extends State<LoginView> {
 
   bool _usePhoneLogin = false;
   bool _showAdminCode = false;
+  bool _showPassword = false;
   String? _errorMessage;
 
   @override
@@ -308,10 +309,18 @@ class _LoginViewState extends State<LoginView> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: !_showPassword,
+                        decoration: InputDecoration(
                           hintText: "••••••••",
-                          prefixIcon: Icon(LucideIcons.lock, size: 18),
+                          prefixIcon: const Icon(LucideIcons.lock, size: 18),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                              size: 18,
+                              color: context.textSecondaryColor,
+                            ),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -351,10 +360,18 @@ class _LoginViewState extends State<LoginView> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: !_showPassword,
+                        decoration: InputDecoration(
                           hintText: "••••••••",
-                          prefixIcon: Icon(LucideIcons.lock, size: 18),
+                          prefixIcon: const Icon(LucideIcons.lock, size: 18),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                              size: 18,
+                              color: context.textSecondaryColor,
+                            ),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                          ),
                         ),
                       ),
                       if (!_isRegister) ...[
@@ -390,10 +407,18 @@ class _LoginViewState extends State<LoginView> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: !_showPassword,
+                        decoration: InputDecoration(
                           hintText: "••••••••",
-                          prefixIcon: Icon(LucideIcons.lock, size: 18),
+                          prefixIcon: const Icon(LucideIcons.lock, size: 18),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
+                              size: 18,
+                              color: context.textSecondaryColor,
+                            ),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                          ),
                         ),
                       ),
                       if (!_isRegister) ...[
