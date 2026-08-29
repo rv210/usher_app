@@ -1,1 +1,41 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"church-usher-app","appId":"1:384928842494:android:0c62680350696b92235baf","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"church-usher-app","configurations":{"android":"1:384928842494:android:0c62680350696b92235baf","ios":"1:384928842494:ios:4d47a8737a5bf44d235baf","macos":"1:384928842494:ios:4d47a8737a5bf44d235baf","web":"1:384928842494:web:fe40cc61f152b172235baf","windows":"1:384928842494:web:bd33a23dd1f74444235baf"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "church-usher-app",
+          "appId": "1:384928842494:android:0c62680350696b92235baf",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "church-usher-app",
+          "configurations": {
+            "android": "1:384928842494:android:0c62680350696b92235baf",
+            "ios": "1:384928842494:ios:4d47a8737a5bf44d235baf",
+            "macos": "1:384928842494:ios:4d47a8737a5bf44d235baf",
+            "web": "1:384928842494:web:fe40cc61f152b172235baf",
+            "windows": "1:384928842494:web:bd33a23dd1f74444235baf"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}

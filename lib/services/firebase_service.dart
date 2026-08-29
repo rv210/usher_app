@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/team_member.dart';
 import '../models/deployment.dart';
@@ -115,10 +116,22 @@ class FirebaseService extends ChangeNotifier {
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
 
+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+
   void initPushNotifications() async {
     try {
       if (Firebase.apps.isEmpty) return;
       final messaging = FirebaseMessaging.instance;
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await _localNotifications.initialize(
+            const InitializationSettings(
+              android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+            ),
+          );
+        } catch (_) {}
+      }
       final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
@@ -177,6 +190,23 @@ class FirebaseService extends ChangeNotifier {
 
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           debugPrint("Received Push Notification: ${message.notification?.title}");
+          final notification = message.notification;
+          if (notification != null && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+            _localNotifications.show(
+              notification.hashCode,
+              notification.title,
+              notification.body,
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'high_importance_channel',
+                  'High Importance Notifications',
+                  channelDescription: 'Used for comms, schedule, and deployment alerts',
+                  importance: Importance.max,
+                  priority: Priority.high,
+                ),
+              ),
+            );
+          }
         });
 
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
