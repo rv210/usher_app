@@ -112,6 +112,9 @@ class FirebaseService extends ChangeNotifier {
   int get currentTallyCount => _currentTallyCount;
   String get activeServiceType => _activeServiceType;
 
+  String? _fcmToken;
+  String? get fcmToken => _fcmToken;
+
   final ValueNotifier<Map<String, String>?> inAppNotificationBanner = ValueNotifier(null);
   Timer? _bannerDismissTimer;
 
