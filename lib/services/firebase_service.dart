@@ -115,27 +115,6 @@ class FirebaseService extends ChangeNotifier {
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
 
-  final ValueNotifier<Map<String, String>?> inAppNotificationBanner = ValueNotifier(null);
-  Timer? _bannerDismissTimer;
-
-  void showInAppBanner({required String title, required String body, String? authorName}) {
-    _bannerDismissTimer?.cancel();
-    inAppNotificationBanner.value = {
-      'title': title,
-      'body': body,
-      'authorName': authorName ?? title,
-      'time': 'Just now',
-    };
-    _bannerDismissTimer = Timer(const Duration(seconds: 5), () {
-      inAppNotificationBanner.value = null;
-    });
-  }
-
-  void dismissInAppBanner() {
-    _bannerDismissTimer?.cancel();
-    inAppNotificationBanner.value = null;
-  }
-
   void initPushNotifications() async {
     try {
       if (Firebase.apps.isEmpty) return;
@@ -184,10 +163,7 @@ class FirebaseService extends ChangeNotifier {
         }
 
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          debugPrint("Received Foreground Push Notification: ${message.notification?.title}");
-          final title = message.notification?.title ?? message.data['title'] ?? 'Guardians Comms';
-          final body = message.notification?.body ?? message.data['body'] ?? '';
-          showInAppBanner(title: title, body: body);
+          debugPrint("Received Push Notification: ${message.notification?.title}");
         });
 
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -1240,7 +1216,6 @@ class FirebaseService extends ChangeNotifier {
     }
 
     final Map<String, CommsMessage> commsCache = {};
-    bool isInitialCommsLoad = true;
     for (var colName in ['communications', 'comms_messages']) {
       try {
         _db.collection(colName).snapshots().listen((snap) {
@@ -1249,20 +1224,9 @@ class FirebaseService extends ChangeNotifier {
               commsCache.remove(change.doc.id);
             } else if (change.doc.data() != null) {
               final msg = CommsMessage.fromMap(change.doc.data()!, change.doc.id);
-              if (!isInitialCommsLoad &&
-                  change.type == DocumentChangeType.added &&
-                  msg.authorUid != _currentUser?.uid &&
-                  !commsCache.containsKey(msg.id)) {
-                showInAppBanner(
-                  title: msg.authorName ?? 'Guardians Comms',
-                  body: msg.text,
-                  authorName: msg.authorName,
-                );
-              }
               commsCache[msg.id] = msg;
             }
           }
-          isInitialCommsLoad = false;
           final list = commsCache.values.toList()
             ..sort((a, b) => (a.createdAt ?? '').compareTo(b.createdAt ?? ''));
           _commsMessages = list;
