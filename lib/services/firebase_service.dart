@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -144,6 +144,19 @@ class FirebaseService extends ChangeNotifier {
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+          try {
+            String? apnsToken = await messaging.getAPNSToken();
+            if (apnsToken == null) {
+              await Future.delayed(const Duration(seconds: 2));
+              apnsToken = await messaging.getAPNSToken();
+            }
+            debugPrint("iOS APNs Token: $apnsToken");
+          } catch (e) {
+            debugPrint("APNs Token retrieval info: $e");
+          }
+        }
+
         try {
           _fcmToken = await messaging.getToken();
           debugPrint("FCM Device Token: $_fcmToken");
