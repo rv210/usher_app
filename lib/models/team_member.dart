@@ -77,15 +77,24 @@ class TeamMember {
     final lEmail = (email ?? '').toLowerCase();
     final lName = finalName.toLowerCase();
 
-    if (lEmail.contains('robv88') ||
+    final bool isKnownAdmin = lEmail.contains('robv88') ||
         lName.contains('robert') ||
         lName.contains('vargas') ||
         lName.contains('louis') ||
-        lName.contains('richardson')) {
-      role = 'Admin';
+        lName.contains('richardson') ||
+        role == 'Admin';
+
+    bool approved;
+    if (isKnownAdmin) {
+      approved = true;
+    } else if (data.containsKey('approved')) {
+      approved = parseBool(data['approved'], false);
+    } else if (data.containsKey('Approved')) {
+      approved = parseBool(data['Approved'], false);
+    } else {
+      approved = false;
     }
 
-    final bool approved = parseBool(data['approved'] ?? data['Approved'], true);
     final bool denied = parseBool(data['denied'] ?? data['Denied'], false);
 
     return TeamMember(

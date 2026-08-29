@@ -35,12 +35,12 @@ class FirebaseService extends ChangeNotifier {
   List<Deployment> _deployments = [];
 
   Future<void> _writeTeamDoc(String docId, Map<String, dynamic> data) async {
-    try {
-      await _db.collection('team').doc(docId).set(data, SetOptions(merge: true));
-    } catch (_) {}
-    try {
-      await _db.collection('users').doc(docId).set(data, SetOptions(merge: true));
-    } catch (_) {}
+    final List<String> collections = ['team', 'users', 'ushers', 'team_members', 'roster'];
+    for (var col in collections) {
+      try {
+        await _db.collection(col).doc(docId).set(data, SetOptions(merge: true));
+      } catch (_) {}
+    }
   }
 
   Future<void> _deleteTeamDoc(String docId) async {
@@ -1150,10 +1150,33 @@ class FirebaseService extends ChangeNotifier {
     await _writeTeamDoc(uid, updated.toMap());
   }
 
+  Future<void> refreshRoster() async {
+    final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
+    final Map<String, TeamMember> merged = {};
+    for (var colName in collectionsToList) {
+      try {
+        final snap = await _db.collection(colName).get();
+        for (var d in snap.docs) {
+          try {
+            final u = TeamMember.fromMap(d.data(), d.id);
+            merged[u.id] = u;
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    if (merged.isNotEmpty) {
+      _liveRoster = merged.values.toList();
+      _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
+      _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
+      _deniedUsers = _liveRoster.where((u) => u.denied).toList();
+      notifyListeners();
+    }
+  }
+
   void _listenToFirestore() {
     if (_currentUser == null) return;
 
-    final List<String> collectionsToList = ['team', 'users'];
+    final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
     final Map<String, List<TeamMember>> collectionDocsMap = {};
 
     void processAllSnapshots() {
