@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/team_member.dart';
 import '../models/deployment.dart';
@@ -247,9 +248,67 @@ class FirebaseService extends ChangeNotifier {
       if (isDark != null) {
         _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
       }
+
+      _biometricEnabled = prefs.getBool('biometric_unlock_enabled') ?? false;
+      // A session restored from a previous launch should be gated behind
+      // biometrics; a fresh sign-in later in this same app run should not.
+      if (_biometricEnabled && _auth.currentUser != null) {
+        _isLocked = true;
+      }
+
       notifyListeners();
     } catch (e) {
       debugPrint("Error loading stored theme preferences: $e");
+    }
+  }
+
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  bool _biometricEnabled = false;
+  bool _isLocked = false;
+
+  bool get biometricEnabled => _biometricEnabled;
+  bool get isLocked => _isLocked;
+
+  Future<bool> isBiometricAvailable() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      return canCheck || isSupported;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> setBiometricEnabled(bool value) async {
+    _biometricEnabled = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('biometric_unlock_enabled', value);
+    } catch (_) {}
+  }
+
+  void lockIfNeeded() {
+    if (_biometricEnabled && _currentUser != null) {
+      _isLocked = true;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> unlockWithBiometrics() async {
+    try {
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: "Unlock Guardians of the Gate",
+        options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
+      );
+      if (didAuthenticate) {
+        _isLocked = false;
+        notifyListeners();
+      }
+      return didAuthenticate;
+    } catch (e) {
+      debugPrint("Biometric unlock error: $e");
+      return false;
     }
   }
 
@@ -838,6 +897,7 @@ class FirebaseService extends ChangeNotifier {
     _currentUser = null;
     _userProfile = null;
     _isOfflineDemoMode = false;
+    _isLocked = false;
     notifyListeners();
   }
 

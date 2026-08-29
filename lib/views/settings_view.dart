@@ -14,6 +14,31 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   bool _notificationsEnabled = true;
+  bool _biometricAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Provider.of<FirebaseService>(context, listen: false).isBiometricAvailable().then((available) {
+      if (mounted) setState(() => _biometricAvailable = available);
+    });
+  }
+
+  Future<void> _onBiometricToggled(bool value, FirebaseService firebaseService) async {
+    if (!value) {
+      await firebaseService.setBiometricEnabled(false);
+      return;
+    }
+
+    final confirmed = await firebaseService.unlockWithBiometrics();
+    if (confirmed) {
+      await firebaseService.setBiometricEnabled(true);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't verify your identity. Biometric unlock was not enabled.")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -160,6 +185,17 @@ class _SettingsViewState extends State<SettingsView> {
                       activeThumbColor: Theme.of(context).colorScheme.secondary,
                       onChanged: (val) => setState(() => _notificationsEnabled = val),
                     ),
+                    if (_biometricAvailable) ...[
+                      Divider(height: 1, color: context.borderThemeColor),
+                      SwitchListTile(
+                        title: Text("Face ID / Fingerprint Unlock", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        subtitle: Text("Require biometrics to reopen the app", style: GoogleFonts.inter(fontSize: 12)),
+                        secondary: Icon(LucideIcons.fingerprint, color: Theme.of(context).primaryColor),
+                        value: firebaseService.biometricEnabled,
+                        activeThumbColor: Theme.of(context).primaryColor,
+                        onChanged: (val) => _onBiometricToggled(val, firebaseService),
+                      ),
+                    ],
                   ],
                 ),
               ),

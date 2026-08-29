@@ -32,6 +32,9 @@ class _LoginViewState extends State<LoginView> {
   bool _showPassword = false;
   String? _errorMessage;
 
+  bool _unlockAttempting = false;
+  bool _hasTriggeredAutoUnlock = false;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +47,27 @@ class _LoginViewState extends State<LoginView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _firebaseService = Provider.of<FirebaseService>(context, listen: false);
+
+    if (!_hasTriggeredAutoUnlock && _firebaseService!.isLocked) {
+      _hasTriggeredAutoUnlock = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _attemptBiometricUnlock());
+    }
+  }
+
+  Future<void> _attemptBiometricUnlock() async {
+    if (!mounted || _unlockAttempting) return;
+    setState(() {
+      _unlockAttempting = true;
+      _errorMessage = null;
+    });
+
+    final success = await _firebaseService!.unlockWithBiometrics();
+
+    if (!mounted) return;
+    setState(() {
+      _unlockAttempting = false;
+      if (!success) _errorMessage = "Couldn't verify your identity. Please try again.";
+    });
   }
 
   @override
@@ -132,9 +156,17 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    final firebaseService = Provider.of<FirebaseService>(context);
+
+    // A locked session (biometric unlock enabled, already signed in) shows a
+    // quick "Welcome Back" unlock screen here instead of the normal
+    // credential form — there's no reason to make the user retype anything.
+    if (firebaseService.isLocked) {
+      return _buildUnlockScreen(context, firebaseService);
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final firebaseService = Provider.of<FirebaseService>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -587,6 +619,77 @@ class _LoginViewState extends State<LoginView> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildUnlockScreen(BuildContext context, FirebaseService firebaseService) {
+    final profile = firebaseService.userProfile;
+    final name = (profile?.name != null && profile!.name!.trim().isNotEmpty) ? profile.name!.trim() : "back";
+
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: context.activeGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(LucideIcons.fingerprint, color: Colors.white, size: 40),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                "Welcome $name",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: context.textPrimaryColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Sign in with Face ID or your fingerprint to continue.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 14, color: context.textSecondaryColor),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 20),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.danger, fontWeight: FontWeight.w500),
+                ),
+              ],
+              const SizedBox(height: 32),
+              DribbbleGlowButton(
+                label: "Sign In with Face ID",
+                icon: LucideIcons.fingerprint,
+                isLoading: _unlockAttempting,
+                onPressed: _attemptBiometricUnlock,
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => firebaseService.signOut(),
+                child: Text(
+                  "Sign Out Instead",
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: context.textSecondaryColor),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

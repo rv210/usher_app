@@ -91,10 +91,31 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentTab = 0; // Default to Dashboard
   double _edgeDragDistance = 0;
   bool _edgeDragTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Lock on the way to the background, not on return — otherwise the
+    // already-unlocked content flashes before the lock screen appears.
+    if (state == AppLifecycleState.paused) {
+      Provider.of<FirebaseService>(context, listen: false).lockIfNeeded();
+    }
+  }
 
   void _onNavigateToTab(int index) {
     setState(() => _currentTab = index);
@@ -162,6 +183,12 @@ class _MainShellState extends State<MainShell> {
           );
         },
       );
+    }
+
+    // Biometric App Lock — LoginView shows a "Welcome Back" unlock screen
+    // instead of the normal credential form when a session is locked.
+    if (firebaseService.isLocked) {
+      return const LoginView(initialMode: 'login');
     }
 
     final profile = firebaseService.userProfile;
