@@ -112,8 +112,26 @@ class FirebaseService extends ChangeNotifier {
   int get currentTallyCount => _currentTallyCount;
   String get activeServiceType => _activeServiceType;
 
-  String? _fcmToken;
-  String? get fcmToken => _fcmToken;
+  final ValueNotifier<Map<String, String>?> inAppNotificationBanner = ValueNotifier(null);
+  Timer? _bannerDismissTimer;
+
+  void showInAppBanner({required String title, required String body, String? authorName}) {
+    _bannerDismissTimer?.cancel();
+    inAppNotificationBanner.value = {
+      'title': title,
+      'body': body,
+      'authorName': authorName ?? title,
+      'time': 'Just now',
+    };
+    _bannerDismissTimer = Timer(const Duration(seconds: 5), () {
+      inAppNotificationBanner.value = null;
+    });
+  }
+
+  void dismissInAppBanner() {
+    _bannerDismissTimer?.cancel();
+    inAppNotificationBanner.value = null;
+  }
 
   void initPushNotifications() async {
     try {
@@ -125,6 +143,22 @@ class FirebaseService extends ChangeNotifier {
         sound: true,
         provisional: false,
       );
+
+      // Display system head-up notification banner even when app is in foreground on iOS
+      try {
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      } catch (_) {}
+
+      if (!kIsWeb) {
+        try {
+          await messaging.subscribeToTopic('comms');
+          await messaging.subscribeToTopic('all_ushers');
+        } catch (_) {}
+      }
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
@@ -148,6 +182,9 @@ class FirebaseService extends ChangeNotifier {
 
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           debugPrint("Received Foreground Push Notification: ${message.notification?.title}");
+          final title = message.notification?.title ?? message.data['title'] ?? 'Guardians Comms';
+          final body = message.notification?.body ?? message.data['body'] ?? '';
+          showInAppBanner(title: title, body: body);
         });
 
         FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -167,6 +204,7 @@ class FirebaseService extends ChangeNotifier {
         'body': body,
         'sender': _userProfile?.name ?? 'Guardians Admin',
         'senderUid': _currentUser?.uid ?? '',
+        'type': 'comms',
         'createdAt': DateTime.now().toIso8601String(),
       };
       await _db.collection('notifications').doc(notifDoc['id'] as String).set(notifDoc);
@@ -351,8 +389,8 @@ class FirebaseService extends ChangeNotifier {
       await _db.collection('communications').doc(msg.id).set(msg.toMap());
       await _db.collection('comms_messages').doc(msg.id).set(msg.toMap());
       sendPushNotificationAlert(
-        title: "Team Comms Message",
-        body: "${msg.authorName ?? 'Usher'}: ${msg.text}",
+        title: msg.authorName ?? 'Guardians Comms',
+        body: msg.text,
       );
     } catch (e) {
       debugPrint("Comms message post error: $e");
@@ -1176,6 +1214,7 @@ class FirebaseService extends ChangeNotifier {
     }
 
     final Map<String, CommsMessage> commsCache = {};
+    bool isInitialCommsLoad = true;
     for (var colName in ['communications', 'comms_messages']) {
       try {
         _db.collection(colName).snapshots().listen((snap) {
@@ -1184,9 +1223,20 @@ class FirebaseService extends ChangeNotifier {
               commsCache.remove(change.doc.id);
             } else if (change.doc.data() != null) {
               final msg = CommsMessage.fromMap(change.doc.data()!, change.doc.id);
+              if (!isInitialCommsLoad &&
+                  change.type == DocumentChangeType.added &&
+                  msg.authorUid != _currentUser?.uid &&
+                  !commsCache.containsKey(msg.id)) {
+                showInAppBanner(
+                  title: msg.authorName ?? 'Guardians Comms',
+                  body: msg.text,
+                  authorName: msg.authorName,
+                );
+              }
               commsCache[msg.id] = msg;
             }
           }
+          isInitialCommsLoad = false;
           final list = commsCache.values.toList()
             ..sort((a, b) => (a.createdAt ?? '').compareTo(b.createdAt ?? ''));
           _commsMessages = list;

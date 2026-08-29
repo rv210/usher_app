@@ -157,186 +157,428 @@ class _MainShellState extends State<MainShell> {
     }
 
     if (isWideScreen) {
-      return Scaffold(
-        body: DribbbleAmbientBackground(
-          child: Row(
-            children: [
-              // Floating Desktop Navigation Rail
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: DribbbleGlassContainer(
-                  borderRadius: 24,
-                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-                  child: Column(
+      return ValueListenableBuilder<Map<String, String>?>(
+        valueListenable: firebaseService.inAppNotificationBanner,
+        builder: (context, bannerData, _) {
+          return Scaffold(
+            body: Stack(
+              children: [
+                DribbbleAmbientBackground(
+                  child: Row(
                     children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          gradient: AppThemePresets.configs[firebaseService.activeStyleTheme]?.gradient ?? AppColors.primaryGradient,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Image.asset('assets/images/app_icon.jpg', fit: BoxFit.cover),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      Expanded(
-                        child: SingleChildScrollView(
+                      // Floating Desktop Navigation Rail
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: DribbbleGlassContainer(
+                          borderRadius: 24,
+                          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
                           child: Column(
-                            children: List.generate(navItems.length, (index) {
-                              final isSelected = _currentTab == index;
-                              final item = navItems[index];
-                              final activeGradient = AppThemePresets.configs[firebaseService.activeStyleTheme]?.gradient ?? AppColors.primaryGradient;
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                                child: InkWell(
-                                  onTap: () => _onNavigateToTab(index),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      gradient: isSelected ? activeGradient : null,
-                                      color: isSelected ? null : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(16),
-                                      boxShadow: isSelected
-                                          ? [
-                                              BoxShadow(
-                                                color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ]
-                                          : null,
+                            children: [
+                              Container(
+                                width: 54,
+                                height: 54,
+                                decoration: BoxDecoration(
+                                  gradient: AppThemePresets.configs[firebaseService.activeStyleTheme]?.gradient ?? AppColors.primaryGradient,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 6),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          item['icon'] as IconData,
-                                          color: isSelected
-                                              ? Colors.white
-                                              : context.textSecondaryColor,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          item['label'] as String,
-                                          style: GoogleFonts.outfit(
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                            fontSize: 14,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : context.textSecondaryColor,
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Image.asset('assets/images/app_icon.jpg', fit: BoxFit.cover),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: List.generate(navItems.length, (index) {
+                                      final isSelected = _currentTab == index;
+                                      final item = navItems[index];
+                                      final activeGradient = AppThemePresets.configs[firebaseService.activeStyleTheme]?.gradient ?? AppColors.primaryGradient;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                        child: InkWell(
+                                          onTap: () => _onNavigateToTab(index),
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              gradient: isSelected ? activeGradient : null,
+                                              color: isSelected ? null : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(16),
+                                              boxShadow: isSelected
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
+                                                        blurRadius: 12,
+                                                        offset: const Offset(0, 4),
+                                                      ),
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  item['icon'] as IconData,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : context.textSecondaryColor,
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  item['label'] as String,
+                                                  style: GoogleFonts.outfit(
+                                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                                    fontSize: 14,
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : context.textSecondaryColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      );
+                                    }),
                                   ),
                                 ),
-                              );
-                            }),
+                              ),
+                            ],
                           ),
+                        ),
+                      ),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _currentTab,
+                          children: pages,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              Expanded(
-                child: IndexedStack(
-                  index: _currentTab,
-                  children: pages,
-                ),
-              ),
-            ],
-          ),
-        ),
+                if (bannerData != null)
+                  Positioned(
+                    top: 20,
+                    right: 24,
+                    width: 380,
+                    child: InAppCommsBanner(
+                      data: bannerData,
+                      onDismiss: firebaseService.dismissInAppBanner,
+                      onReply: () {
+                        firebaseService.dismissInAppBanner();
+                        _onNavigateToTab(4);
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       );
     }
 
     final activeGradient = context.activeGradient;
 
-    return Scaffold(
-      extendBody: true,
-      body: DribbbleAmbientBackground(
-        child: IndexedStack(
-          index: _currentTab,
-          children: pages,
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: DribbbleGlassContainer(
-            borderRadius: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            blur: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(navItems.length, (index) {
-                final isSelected = _currentTab == index;
-                final item = navItems[index];
-                return GestureDetector(
-                  onTap: () => _onNavigateToTab(index),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? 14 : 10,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: isSelected ? activeGradient : null,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Theme.of(context).primaryColor.withValues(alpha: 0.45),
-                                blurRadius: 14,
-                                spreadRadius: -2,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          item['icon'] as IconData,
-                          size: 20,
-                          color: isSelected
-                              ? Colors.white
-                              : context.textSecondaryColor,
+    return ValueListenableBuilder<Map<String, String>?>(
+      valueListenable: firebaseService.inAppNotificationBanner,
+      builder: (context, bannerData, _) {
+        return Scaffold(
+          extendBody: true,
+          body: Stack(
+            children: [
+              DribbbleAmbientBackground(
+                child: IndexedStack(
+                  index: _currentTab,
+                  children: pages,
+                ),
+              ),
+              if (bannerData != null)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 8,
+                  left: 16,
+                  right: 16,
+                  child: InAppCommsBanner(
+                    data: bannerData,
+                    onDismiss: firebaseService.dismissInAppBanner,
+                    onReply: () {
+                      firebaseService.dismissInAppBanner();
+                      _onNavigateToTab(4);
+                    },
+                  ),
+                ),
+            ],
+          ),
+          bottomNavigationBar: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: DribbbleGlassContainer(
+                borderRadius: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                blur: 20,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: List.generate(navItems.length, (index) {
+                    final isSelected = _currentTab == index;
+                    final item = navItems[index];
+                    return GestureDetector(
+                      onTap: () => _onNavigateToTab(index),
+                      behavior: HitTestBehavior.opaque,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOutCubic,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSelected ? 14 : 10,
+                          vertical: 10,
                         ),
-                        if (isSelected) ...[
-                          const SizedBox(width: 6),
+                        decoration: BoxDecoration(
+                          gradient: isSelected ? activeGradient : null,
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: Theme.of(context).primaryColor.withValues(alpha: 0.45),
+                                    blurRadius: 14,
+                                    spreadRadius: -2,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              item['icon'] as IconData,
+                              size: 20,
+                              color: isSelected
+                                  ? Colors.white
+                                  : context.textSecondaryColor,
+                            ),
+                            if (isSelected) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                item['label'] as String,
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class InAppCommsBanner extends StatelessWidget {
+  final Map<String, String> data;
+  final VoidCallback onDismiss;
+  final VoidCallback onReply;
+
+  const InAppCommsBanner({
+    super.key,
+    required this.data,
+    required this.onDismiss,
+    required this.onReply,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = data['authorName'] ?? data['title'] ?? 'Guardians Comms';
+    final body = data['body'] ?? '';
+    final time = data['time'] ?? 'Just now';
+
+    return Dismissible(
+      key: UniqueKey(),
+      direction: DismissDirection.up,
+      onDismissed: (_) => onDismiss(),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onReply,
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1714).withValues(alpha: 0.96),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Stack(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: AppColors.primaryGradient,
+                          ),
+                          child: Center(
+                            child: Text(
+                              title.isNotEmpty ? title[0].toUpperCase() : 'U',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFB45309),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(LucideIcons.messageSquare, size: 10, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                "Messages",
+                                style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                time,
+                                style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
                           Text(
-                            item['label'] as String,
+                            title,
                             style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              fontSize: 15,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            body,
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.88),
+                              fontSize: 13,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                    IconButton(
+                      icon: const Icon(LucideIcons.chevronUp, size: 16, color: Colors.white54),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: onDismiss,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
+                      onPressed: onDismiss,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        "Mark as read",
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 14,
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                    TextButton(
+                      onPressed: onReply,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        "Reply",
+                        style: GoogleFonts.inter(
+                          color: AppColors.accentLight,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
