@@ -33,12 +33,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
 
   try {
     await dotenv.load(fileName: ".env");
@@ -73,14 +67,19 @@ class UsherApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
+    final isDark = firebaseService.themeMode == ThemeMode.dark;
 
-    return MaterialApp(
-      title: 'Guardians of the Gate - Usher App',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.getTheme(Brightness.light, firebaseService.activeStyleTheme),
-      darkTheme: AppTheme.getTheme(Brightness.dark, firebaseService.activeStyleTheme),
-      themeMode: firebaseService.themeMode,
-      home: const MainShell(),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent),
+      child: MaterialApp(
+        title: 'Guardians of the Gate - Usher App',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.getTheme(Brightness.light, firebaseService.activeStyleTheme),
+        darkTheme: AppTheme.getTheme(Brightness.dark, firebaseService.activeStyleTheme),
+        themeMode: firebaseService.themeMode,
+        home: const MainShell(),
+      ),
     );
   }
 }
@@ -93,12 +92,48 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  bool _showLoginFlow = false;
-  String _loginMode = 'login';
   int _currentTab = 0; // Default to Dashboard
+  double _edgeDragDistance = 0;
+  bool _edgeDragTriggered = false;
 
   void _onNavigateToTab(int index) {
     setState(() => _currentTab = index);
+  }
+
+  // Tabs are peers in an IndexedStack, not pushed routes, so iOS's native
+  // edge-swipe-back gesture has nothing to attach to. This gives every tab
+  // a left-edge swipe back to the Hub without restructuring tab state.
+  Widget _withEdgeSwipeBack(Widget child) {
+    final supportsEdgeSwipe = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+    if (!supportsEdgeSwipe || _currentTab == 0) return child;
+
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 24,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart: (_) {
+              _edgeDragDistance = 0;
+              _edgeDragTriggered = false;
+            },
+            onHorizontalDragUpdate: (details) {
+              if (_edgeDragTriggered) return;
+              _edgeDragDistance += details.delta.dx;
+              if (_edgeDragDistance > 60) {
+                _edgeDragTriggered = true;
+                _onNavigateToTab(0);
+              }
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -115,24 +150,16 @@ class _MainShellState extends State<MainShell> {
 
     // Unauthenticated -> Landing or Login
     if (firebaseService.currentUser == null) {
-      if (_showLoginFlow) {
-        return LoginView(
-          initialMode: _loginMode,
-          onBackToLanding: () => setState(() => _showLoginFlow = false),
-        );
-      }
       return LandingView(
         onGetStarted: () {
-          setState(() {
-            _loginMode = 'register';
-            _showLoginFlow = true;
-          });
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginView(initialMode: 'register')),
+          );
         },
         onLogin: () {
-          setState(() {
-            _loginMode = 'login';
-            _showLoginFlow = true;
-          });
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginView(initialMode: 'login')),
+          );
         },
       );
     }
@@ -172,7 +199,7 @@ class _MainShellState extends State<MainShell> {
     }
 
     if (isWideScreen) {
-      return Scaffold(
+      return _withEdgeSwipeBack(Scaffold(
         body: DribbbleAmbientBackground(
           child: Row(
             children: [
@@ -277,12 +304,12 @@ class _MainShellState extends State<MainShell> {
             ],
           ),
         ),
-      );
+      ));
     }
 
     final activeGradient = context.activeGradient;
 
-    return Scaffold(
+    return _withEdgeSwipeBack(Scaffold(
       extendBody: true,
       body: DribbbleAmbientBackground(
         child: IndexedStack(
@@ -356,7 +383,7 @@ class _MainShellState extends State<MainShell> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

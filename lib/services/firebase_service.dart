@@ -577,15 +577,18 @@ class FirebaseService extends ChangeNotifier {
 
   ConfirmationResult? _webConfirmationResult;
   String? _verificationId;
-  String? _phoneSecurityCode;
   String? _pendingPhone;
   TeamMember? _pendingPhoneMember;
+  bool _phoneCodeSent = false;
+  String? _phoneAuthError;
 
-  String? get phoneSecurityCode => _phoneSecurityCode;
   String? get pendingPhone => _pendingPhone;
+  bool get phoneCodeSent => _phoneCodeSent;
+  String? get phoneAuthError => _phoneAuthError;
 
-  Future<String> sendPhoneSecurityCode(String rawPhone) async {
+  Future<void> sendPhoneSecurityCode(String rawPhone) async {
     _authLoading = true;
+    _phoneAuthError = null;
     notifyListeners();
 
     final cleanPhone = rawPhone.replaceAll(RegExp(r'[^\d]'), '');
@@ -621,52 +624,78 @@ class FirebaseService extends ChangeNotifier {
         throw Exception("No registered usher found matching phone number $rawPhone.");
       }
 
-      final code = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
-      _phoneSecurityCode = code;
       _pendingPhone = rawPhone;
       _pendingPhoneMember = matchedMember;
+      _phoneCodeSent = false;
 
-      // Trigger Production Phone Auth SMS dispatch
       if (kIsWeb) {
-        try {
-          _webConfirmationResult = await _auth.signInWithPhoneNumber(formatted);
-          debugPrint("Web production SMS verification triggered for $formatted");
-        } catch (e) {
-          debugPrint("Web production SMS trigger info: $e");
-        }
-      } else {
-        try {
-          await _auth.verifyPhoneNumber(
-            phoneNumber: formatted,
-            verificationCompleted: (PhoneAuthCredential credential) async {
-              final userCred = await _auth.signInWithCredential(credential);
-              _currentUser = userCred.user;
-              _userProfile = matchedMember;
-              _authLoading = false;
-              notifyListeners();
-            },
-            verificationFailed: (e) => debugPrint("Native phone SMS error: ${e.message}"),
-            codeSent: (verId, _) {
-              _verificationId = verId;
-              notifyListeners();
-            },
-            codeAutoRetrievalTimeout: (verId) {
-              _verificationId = verId;
-            },
-          );
-        } catch (e) {
-          debugPrint("Native production SMS trigger error: $e");
-        }
+        _webConfirmationResult = await _auth.signInWithPhoneNumber(formatted);
+        _phoneCodeSent = true;
+        _authLoading = false;
+        notifyListeners();
+        return;
       }
 
-      _authLoading = false;
-      notifyListeners();
-      return code;
+      // Native platforms report success/failure via callbacks, so bridge
+      // them into a Future the caller can actually await and react to.
+      final completer = Completer<void>();
+      await _auth.verifyPhoneNumber(
+        phoneNumber: formatted,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          try {
+            final userCred = await _auth.signInWithCredential(credential);
+            _currentUser = userCred.user;
+            _userProfile = matchedMember;
+            _pendingPhone = null;
+            _pendingPhoneMember = null;
+            _phoneCodeSent = false;
+          } catch (e) {
+            _phoneAuthError = "Automatic verification failed. Please enter the code manually.";
+          } finally {
+            _authLoading = false;
+            notifyListeners();
+            if (!completer.isCompleted) completer.complete();
+          }
+        },
+        verificationFailed: (e) {
+          _phoneAuthError = e.message ?? "Phone verification failed.";
+          _pendingPhone = null;
+          _pendingPhoneMember = null;
+          _authLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete();
+        },
+        codeSent: (verId, _) {
+          _verificationId = verId;
+          _phoneCodeSent = true;
+          _authLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete();
+        },
+        codeAutoRetrievalTimeout: (verId) {
+          _verificationId = verId;
+        },
+      );
+      await completer.future;
+
+      if (_phoneAuthError != null) {
+        throw Exception(_phoneAuthError);
+      }
     } catch (e) {
       _authLoading = false;
       notifyListeners();
       rethrow;
     }
+  }
+
+  void cancelPhoneVerification() {
+    _pendingPhone = null;
+    _pendingPhoneMember = null;
+    _phoneCodeSent = false;
+    _phoneAuthError = null;
+    _verificationId = null;
+    _webConfirmationResult = null;
+    notifyListeners();
   }
 
   Future<bool> verifyPhoneSecurityCode(String enteredCode) async {
@@ -681,198 +710,39 @@ class FirebaseService extends ChangeNotifier {
     }
 
     try {
+      User? signedInUser;
+
       if (kIsWeb && _webConfirmationResult != null) {
-        try {
-          final userCred = await _webConfirmationResult!.confirm(code);
-          _currentUser = userCred.user;
-        } catch (e) {
-          debugPrint("Web confirm verification error: $e");
-        }
+        final userCred = await _webConfirmationResult!.confirm(code);
+        signedInUser = userCred.user;
       } else if (_verificationId != null) {
-        try {
-          final cred = PhoneAuthProvider.credential(verificationId: _verificationId!, smsCode: code);
-          final userCred = await _auth.signInWithCredential(cred);
-          _currentUser = userCred.user;
-        } catch (e) {
-          debugPrint("Native confirm verification error: $e");
-        }
+        final cred = PhoneAuthProvider.credential(verificationId: _verificationId!, smsCode: code);
+        final userCred = await _auth.signInWithCredential(cred);
+        signedInUser = userCred.user;
+      } else {
+        throw Exception("Verification session expired. Please request a new code.");
       }
 
+      _currentUser = signedInUser;
       if (_pendingPhoneMember != null) {
         _userProfile = _pendingPhoneMember;
       }
 
-      _phoneSecurityCode = null;
       _pendingPhone = null;
       _pendingPhoneMember = null;
       _webConfirmationResult = null;
       _verificationId = null;
+      _phoneCodeSent = false;
 
       _authLoading = false;
       notifyListeners();
       return true;
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
       _authLoading = false;
       notifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<bool> signInWithPhone(String rawPhone, String password) async {
-    _authLoading = true;
-    notifyListeners();
-
-    final cleanPhone = rawPhone.replaceAll(RegExp(r'[^\d]'), '');
-    final lowerRaw = rawPhone.toLowerCase().trim();
-
-    if (cleanPhone.isEmpty && lowerRaw.isEmpty) {
-      _authLoading = false;
-      notifyListeners();
-      throw Exception("Please enter your registered phone number.");
-    }
-
-    if (password.trim().isEmpty) {
-      _authLoading = false;
-      notifyListeners();
-      throw Exception("Please enter your password.");
-    }
-
-    try {
-      // 1. Check in liveRoster memory first
-      TeamMember? matchedMember;
-      for (final m in _liveRoster) {
-        final uPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-        final uName = (m.name ?? '').toLowerCase();
-        final uEmail = (m.email ?? '').toLowerCase();
-
-        final phoneMatch = cleanPhone.isNotEmpty &&
-            uPhone.isNotEmpty &&
-            (uPhone == cleanPhone ||
-             uPhone.endsWith(cleanPhone) ||
-             cleanPhone.endsWith(uPhone) ||
-             (cleanPhone.length >= 7 && uPhone.contains(cleanPhone)));
-
-        final nameMatch = lowerRaw.length >= 3 && uName.contains(lowerRaw);
-        final emailMatch = lowerRaw.length >= 3 && uEmail.contains(lowerRaw);
-
-        if (phoneMatch || nameMatch || emailMatch) {
-          matchedMember = m;
-          break;
-        }
-      }
-
-      // 2. If not found in memory, query Firestore collections
-      if (matchedMember == null) {
-        final collections = ['team', 'users', 'ushers', 'roster', 'teams', 'team_members'];
-        for (var colName in collections) {
-          try {
-            final snap = await _db.collection(colName).get();
-            for (var doc in snap.docs) {
-              final m = TeamMember.fromMap(doc.data(), doc.id);
-              final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-              final uName = (m.name ?? '').toLowerCase();
-              final uEmail = (m.email ?? '').toLowerCase();
-
-              final phoneMatch = cleanPhone.isNotEmpty &&
-                  userPhone.isNotEmpty &&
-                  (userPhone == cleanPhone ||
-                   userPhone.endsWith(cleanPhone) ||
-                   cleanPhone.endsWith(userPhone) ||
-                   (cleanPhone.length >= 7 && userPhone.contains(cleanPhone)));
-
-              final nameMatch = lowerRaw.length >= 3 && uName.contains(lowerRaw);
-              final emailMatch = lowerRaw.length >= 3 && uEmail.contains(lowerRaw);
-
-              if (phoneMatch || nameMatch || emailMatch) {
-                matchedMember = m;
-                break;
-              }
-            }
-          } catch (_) {}
-          if (matchedMember != null) break;
-        }
-      }
-
-      if (matchedMember == null) {
-        _authLoading = false;
-        notifyListeners();
-        throw Exception("No registered usher found matching '$rawPhone'. Please ask your Lead Usher or Admin to add your phone number to the directory.");
-      }
-
-      // 3. Authenticate with FirebaseAuth using registered email or phone fallback email
-      final primaryEmail = (matchedMember.email != null && matchedMember.email!.contains('@'))
-          ? matchedMember.email!.trim()
-          : '${cleanPhone.isNotEmpty ? cleanPhone : matchedMember.id}@usherapp.com';
-      final fallbackEmail = '${cleanPhone.isNotEmpty ? cleanPhone : matchedMember.id}@usherapp.com';
-
-      // Attempt 1: Primary Email Sign-In
-      try {
-        final userCred = await _auth.signInWithEmailAndPassword(
-          email: primaryEmail,
-          password: password,
-        );
-        _currentUser = userCred.user;
-        _userProfile = matchedMember;
-        _authLoading = false;
-        notifyListeners();
-        return true;
-      } on FirebaseAuthException catch (fe1) {
-        if (fe1.code == 'user-not-found') {
-          // Provision login account automatically for existing roster usher
-          try {
-            final newCred = await _auth.createUserWithEmailAndPassword(
-              email: primaryEmail,
-              password: password,
-            );
-            _currentUser = newCred.user;
-            _userProfile = matchedMember;
-            _authLoading = false;
-            notifyListeners();
-            return true;
-          } catch (_) {}
-        }
-
-        // Attempt 2: Fallback Phone Email Sign-In if primaryEmail was different
-        if (primaryEmail != fallbackEmail) {
-          try {
-            final userCred = await _auth.signInWithEmailAndPassword(
-              email: fallbackEmail,
-              password: password,
-            );
-            _currentUser = userCred.user;
-            _userProfile = matchedMember;
-            _authLoading = false;
-            notifyListeners();
-            return true;
-          } on FirebaseAuthException catch (fe2) {
-            if (fe2.code == 'user-not-found') {
-              try {
-                final newCred = await _auth.createUserWithEmailAndPassword(
-                  email: fallbackEmail,
-                  password: password,
-                );
-                _currentUser = newCred.user;
-                _userProfile = matchedMember;
-                _authLoading = false;
-                notifyListeners();
-                return true;
-              } catch (_) {}
-            }
-          } catch (_) {}
-        }
-
-        _authLoading = false;
-        notifyListeners();
-        if (fe1.code == 'wrong-password' || fe1.code == 'invalid-credential') {
-          throw Exception("Incorrect password for usher ${matchedMember.name ?? rawPhone}. Please re-enter your password.");
-        } else {
-          throw Exception(fe1.message ?? "Authentication failed.");
-        }
-      } catch (e) {
-        _authLoading = false;
-        notifyListeners();
-        throw Exception("Phone sign in error: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
-      }
+      throw Exception(e.code == 'invalid-verification-code'
+          ? "That code doesn't match. Please check and try again."
+          : (e.message ?? "Verification failed."));
     } catch (e) {
       _authLoading = false;
       notifyListeners();

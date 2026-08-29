@@ -12,20 +12,12 @@ import UserNotifications
     if FirebaseApp.app() == nil {
       FirebaseApp.configure()
     }
-    
-    if #available(iOS 10.0, *) {
-      UNUserNotificationCenter.current().delegate = self
-      let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
-      UNUserNotificationCenter.current().requestAuthorization(
-        options: authOptions,
-        completionHandler: { _, _ in }
-      )
-    } else {
-      let settings: UIUserNotificationSettings =
-        UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
-      application.registerUserNotificationSettings(settings)
-    }
 
+    // Permission is requested from Dart (FirebaseService.initPushNotifications)
+    // after the user logs in, not here at launch — iOS only shows this
+    // system prompt once per install, so asking here would pre-empt that
+    // in-context request before the user has even seen the app.
+    UNUserNotificationCenter.current().delegate = self
     application.registerForRemoteNotifications()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

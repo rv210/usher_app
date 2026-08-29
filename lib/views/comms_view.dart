@@ -72,9 +72,7 @@ class _CommsViewState extends State<CommsView> {
     final firebaseService = Provider.of<FirebaseService>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Team Comms Feed"),
-      ),
+      appBar: AppBar(title: const Text("Team Comms Feed")),
       body: SafeArea(
         child: Column(
           children: [
@@ -82,7 +80,13 @@ class _CommsViewState extends State<CommsView> {
             Expanded(
               child: firebaseService.commsMessages.isEmpty
                   ? Center(
-                      child: Text("No messages yet", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        "No messages yet",
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     )
                   : ListView.builder(
                       controller: _scrollController,
@@ -90,21 +94,34 @@ class _CommsViewState extends State<CommsView> {
                       itemCount: firebaseService.commsMessages.length,
                       itemBuilder: (context, index) {
                         final msg = firebaseService.commsMessages[index];
-                        final isMine = msg.authorUid != null && msg.authorUid == firebaseService.currentUser?.uid;
+                        final isMine =
+                            msg.authorUid != null &&
+                            msg.authorUid == firebaseService.currentUser?.uid;
                         final timestamp = _parseTimestamp(msg.createdAt);
-                        final previous = index > 0 ? firebaseService.commsMessages[index - 1] : null;
-                        final previousTimestamp = _parseTimestamp(previous?.createdAt);
-                        final showDateHeader = timestamp != null &&
-                            (previousTimestamp == null || !_isSameDay(timestamp, previousTimestamp));
-                        final showSenderName = !isMine &&
-                            (previous == null || previous.authorUid != msg.authorUid || showDateHeader);
+                        final previous = index > 0
+                            ? firebaseService.commsMessages[index - 1]
+                            : null;
+                        final previousTimestamp = _parseTimestamp(
+                          previous?.createdAt,
+                        );
+                        final showDateHeader =
+                            timestamp != null &&
+                            (previousTimestamp == null ||
+                                !_isSameDay(timestamp, previousTimestamp));
+                        final showSenderName =
+                            !isMine &&
+                            (previous == null ||
+                                previous.authorUid != msg.authorUid ||
+                                showDateHeader);
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (showDateHeader)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 child: Center(
                                   child: Text(
                                     _formatDateHeader(timestamp),
@@ -122,9 +139,23 @@ class _CommsViewState extends State<CommsView> {
                                 message: msg,
                                 isMine: isMine,
                                 showSenderName: showSenderName,
-                                timeLabel: timestamp != null ? DateFormat('h:mm a').format(timestamp) : null,
-                                onEdit: isMine ? () => _showEditMessageDialog(context, firebaseService, msg) : null,
-                                onDelete: isMine ? () => _confirmDeleteMessage(context, firebaseService, msg.id) : null,
+                                timeLabel: timestamp != null
+                                    ? DateFormat('h:mm a').format(timestamp)
+                                    : null,
+                                onEdit: isMine
+                                    ? () => _showEditMessageDialog(
+                                        context,
+                                        firebaseService,
+                                        msg,
+                                      )
+                                    : null,
+                                onDelete: isMine
+                                    ? () => _confirmDeleteMessage(
+                                        context,
+                                        firebaseService,
+                                        msg.id,
+                                      )
+                                    : null,
                               ),
                             ),
                           ],
@@ -153,7 +184,10 @@ class _CommsViewState extends State<CommsView> {
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           fillColor: Colors.transparent,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -167,13 +201,19 @@ class _CommsViewState extends State<CommsView> {
                           borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
-                              color: Theme.of(context).primaryColor.withValues(alpha: 0.4),
+                              color: Theme.of(
+                                context,
+                              ).primaryColor.withValues(alpha: 0.4),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        child: const Icon(LucideIcons.send, color: Colors.white, size: 20),
+                        child: const Icon(
+                          LucideIcons.send,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ],
@@ -186,21 +226,26 @@ class _CommsViewState extends State<CommsView> {
     );
   }
 
-  void _showEditMessageDialog(BuildContext context, FirebaseService firebaseService, CommsMessage message) {
+  void _showEditMessageDialog(
+    BuildContext context,
+    FirebaseService firebaseService,
+    CommsMessage message,
+  ) {
     final editController = TextEditingController(text: message.text);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text("Edit Comms Message", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text(
+          "Edit Comms Message",
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: editController,
           maxLines: 3,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: "Edit your message...",
-          ),
+          decoration: const InputDecoration(hintText: "Edit your message..."),
         ),
         actions: [
           TextButton(
@@ -210,7 +255,10 @@ class _CommsViewState extends State<CommsView> {
           ElevatedButton(
             onPressed: () {
               if (editController.text.trim().isNotEmpty) {
-                firebaseService.editCommsMessage(message.id, editController.text.trim());
+                firebaseService.editCommsMessage(
+                  message.id,
+                  editController.text.trim(),
+                );
                 Navigator.pop(ctx);
               }
             },
@@ -221,13 +269,22 @@ class _CommsViewState extends State<CommsView> {
     );
   }
 
-  void _confirmDeleteMessage(BuildContext context, FirebaseService firebaseService, String messageId) {
+  void _confirmDeleteMessage(
+    BuildContext context,
+    FirebaseService firebaseService,
+    String messageId,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text("Delete Message?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        content: const Text("Are you sure you want to remove this update from team comms?"),
+        title: Text(
+          "Delete Message?",
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "Are you sure you want to remove this update from team comms?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -273,7 +330,9 @@ class _ChatBubbleRow extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Theme.of(ctx).cardTheme.color ?? Theme.of(ctx).colorScheme.surface,
+            color:
+                Theme.of(ctx).cardTheme.color ??
+                Theme.of(ctx).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
@@ -281,8 +340,14 @@ class _ChatBubbleRow extends StatelessWidget {
             children: [
               if (onEdit != null)
                 ListTile(
-                  leading: Icon(LucideIcons.edit2, color: Theme.of(ctx).primaryColor),
-                  title: Text("Edit Message", style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                  leading: Icon(
+                    LucideIcons.edit2,
+                    color: Theme.of(ctx).primaryColor,
+                  ),
+                  title: Text(
+                    "Edit Message",
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     onEdit!();
@@ -290,8 +355,17 @@ class _ChatBubbleRow extends StatelessWidget {
                 ),
               if (onDelete != null)
                 ListTile(
-                  leading: const Icon(LucideIcons.trash2, color: AppColors.danger),
-                  title: Text("Delete Message", style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: AppColors.danger)),
+                  leading: const Icon(
+                    LucideIcons.trash2,
+                    color: AppColors.danger,
+                  ),
+                  title: Text(
+                    "Delete Message",
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.danger,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     onDelete!();
@@ -314,52 +388,67 @@ class _ChatBubbleRow extends StatelessWidget {
       bottomRight: Radius.circular(isMine ? 4 : 18),
     );
 
-    final bubble = GestureDetector(
-      onLongPress: () => _showActions(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: isMine ? context.activeGradient : null,
-          color: isMine ? null : (Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
+    final bubble = Container(
+      decoration: BoxDecoration(
+        gradient: isMine ? context.activeGradient : null,
+        color: isMine
+            ? null
+            : (Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.05)),
+        borderRadius: bubbleRadius,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: bubbleRadius,
+        child: InkWell(
           borderRadius: bubbleRadius,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              message.text,
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                height: 1.4,
-                color: isMine ? Colors.white : context.textPrimaryColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
+          onLongPress: () => _showActions(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (message.edited) ...[
-                  Text(
-                    "Edited · ",
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      fontStyle: FontStyle.italic,
-                      color: isMine ? Colors.white.withValues(alpha: 0.75) : context.textSecondaryColor,
-                    ),
+                Text(
+                  message.text,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    height: 1.4,
+                    color: isMine ? Colors.white : context.textPrimaryColor,
                   ),
-                ],
-                if (timeLabel != null)
-                  Text(
-                    timeLabel!,
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      color: isMine ? Colors.white.withValues(alpha: 0.75) : context.textSecondaryColor,
-                    ),
-                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (message.edited) ...[
+                      Text(
+                        "Edited · ",
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          fontStyle: FontStyle.italic,
+                          color: isMine
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : context.textSecondaryColor,
+                        ),
+                      ),
+                    ],
+                    if (timeLabel != null)
+                      Text(
+                        timeLabel!,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: isMine
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : context.textSecondaryColor,
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -375,21 +464,31 @@ class _ChatBubbleRow extends StatelessWidget {
       child: Center(
         child: Text(
           authorName.isNotEmpty ? authorName[0].toUpperCase() : 'U',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 13,
+          ),
         ),
       ),
     );
 
     return Row(
-      mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: isMine
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (!isMine) avatar,
         Flexible(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
+            ),
             child: Column(
-              crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (showSenderName)

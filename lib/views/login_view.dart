@@ -7,12 +7,10 @@ import '../theme/app_theme.dart';
 
 class LoginView extends StatefulWidget {
   final String initialMode; // 'login' or 'register'
-  final VoidCallback onBackToLanding;
 
   const LoginView({
     super.key,
     this.initialMode = 'login',
-    required this.onBackToLanding,
   });
 
   @override
@@ -27,6 +25,8 @@ class _LoginViewState extends State<LoginView> {
   final _phoneController = TextEditingController();
   final _adminCodeController = TextEditingController();
 
+  final _smsCodeController = TextEditingController();
+
   bool _usePhoneLogin = false;
   bool _showAdminCode = false;
   bool _showPassword = false;
@@ -38,13 +38,23 @@ class _LoginViewState extends State<LoginView> {
     _isRegister = widget.initialMode == 'register';
   }
 
+  FirebaseService? _firebaseService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _firebaseService = Provider.of<FirebaseService>(context, listen: false);
+  }
+
   @override
   void dispose() {
+    _firebaseService?.cancelPhoneVerification();
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
     _adminCodeController.dispose();
+    _smsCodeController.dispose();
     super.dispose();
   }
 
@@ -54,20 +64,36 @@ class _LoginViewState extends State<LoginView> {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
     if (!_isRegister && _usePhoneLogin) {
-      final phone = _phoneController.text.trim();
-      final password = _passwordController.text.trim();
+      if (!firebaseService.phoneCodeSent) {
+        final phone = _phoneController.text.trim();
+        if (phone.isEmpty) {
+          if (!mounted) return;
+          setState(() => _errorMessage = "Please enter your registered phone number.");
+          return;
+        }
 
-      if (phone.isEmpty || password.isEmpty) {
+        try {
+          await firebaseService.sendPhoneSecurityCode(phone);
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _errorMessage = "Couldn't send code: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
+        }
+        return;
+      }
+
+      final code = _smsCodeController.text.trim();
+      if (code.isEmpty) {
         if (!mounted) return;
-        setState(() => _errorMessage = "Please enter your phone number and password.");
+        setState(() => _errorMessage = "Please enter the 6-digit code sent to your phone.");
         return;
       }
 
       try {
-        await firebaseService.signInWithPhone(phone, password);
+        await firebaseService.verifyPhoneSecurityCode(code);
+        if (mounted) Navigator.of(context).pop();
       } catch (e) {
         if (!mounted) return;
-        setState(() => _errorMessage = "Authentication failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
+        setState(() => _errorMessage = e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim());
       }
       return;
     }
@@ -97,6 +123,7 @@ class _LoginViewState extends State<LoginView> {
       } else {
         await firebaseService.signIn(email, password);
       }
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = "Authentication failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
@@ -113,7 +140,7 @@ class _LoginViewState extends State<LoginView> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: widget.onBackToLanding,
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(_isRegister ? "Create Usher Account" : "Usher Sign In"),
       ),
@@ -216,7 +243,10 @@ class _LoginViewState extends State<LoginView> {
                         color: !_usePhoneLogin ? Colors.white : context.textPrimaryColor,
                       ),
                       onSelected: (val) {
-                        if (val) setState(() => _usePhoneLogin = false);
+                        if (val) {
+                          firebaseService.cancelPhoneVerification();
+                          setState(() => _usePhoneLogin = false);
+                        }
                       },
                     ),
                     const SizedBox(width: 10),
@@ -345,43 +375,51 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ],
                     ] else if (_usePhoneLogin) ...[
-                      Text("Registered Phone Number", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          hintText: "e.g. (757) 550-8302",
-                          prefixIcon: Icon(LucideIcons.phone, size: 18),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text("Account Password", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: !_showPassword,
-                        decoration: InputDecoration(
-                          hintText: "••••••••",
-                          prefixIcon: const Icon(LucideIcons.lock, size: 18),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
-                              size: 18,
-                              color: context.textSecondaryColor,
-                            ),
-                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                      if (!firebaseService.phoneCodeSent) ...[
+                        Text("Registered Phone Number", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            hintText: "e.g. (757) 550-8302",
+                            prefixIcon: Icon(LucideIcons.phone, size: 18),
                           ),
                         ),
-                      ),
-                      if (!_isRegister) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          "We'll text a 6-digit verification code to this number.",
+                          style: GoogleFonts.inter(fontSize: 12, color: context.textSecondaryColor),
+                        ),
+                      ] else ...[
+                        Text("Verification Code", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _smsCodeController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          decoration: const InputDecoration(
+                            hintText: "123456",
+                            counterText: "",
+                            prefixIcon: Icon(LucideIcons.messageSquare, size: 18),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "Enter the code we texted to ${firebaseService.pendingPhone ?? 'your phone'}.",
+                          style: GoogleFonts.inter(fontSize: 12, color: context.textSecondaryColor),
+                        ),
                         const SizedBox(height: 4),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () => _showForgotPasswordDialog(context, firebaseService),
+                            onPressed: () {
+                              firebaseService.cancelPhoneVerification();
+                              _smsCodeController.clear();
+                              setState(() => _errorMessage = null);
+                            },
                             child: Text(
-                              "Forgot Password?",
+                              "Wrong number? Start over",
                               style: GoogleFonts.outfit(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -448,10 +486,14 @@ class _LoginViewState extends State<LoginView> {
               DribbbleGlowButton(
                 label: _isRegister
                     ? "Register & Enter Hub"
-                    : (_usePhoneLogin ? "Sign In with Phone" : "Sign In"),
+                    : (_usePhoneLogin
+                        ? (firebaseService.phoneCodeSent ? "Verify & Sign In" : "Send Verification Code")
+                        : "Sign In"),
                 icon: _isRegister
                     ? LucideIcons.userPlus
-                    : (_usePhoneLogin ? LucideIcons.phoneCall : LucideIcons.logIn),
+                    : (_usePhoneLogin
+                        ? (firebaseService.phoneCodeSent ? LucideIcons.shieldCheck : LucideIcons.phoneCall)
+                        : LucideIcons.logIn),
                 onPressed: _handleSubmit,
                 isLoading: firebaseService.authLoading,
               ),
