@@ -121,6 +121,9 @@ class FirebaseService extends ChangeNotifier {
   void initPushNotifications() async {
     try {
       if (Firebase.apps.isEmpty) return;
+      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux)) {
+        return;
+      }
       final messaging = FirebaseMessaging.instance;
 
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -147,13 +150,6 @@ class FirebaseService extends ChangeNotifier {
           sound: true,
         );
       } catch (_) {}
-
-      if (!kIsWeb) {
-        try {
-          await messaging.subscribeToTopic('comms');
-          await messaging.subscribeToTopic('all_ushers');
-        } catch (_) {}
-      }
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
