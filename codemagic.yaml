@@ -58,7 +58,7 @@ workflows:
         auth: integration
         submit_to_testflight: true
       firebase:
-        firebase_token: $FIREBASE_TOKEN
+        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
         android:
           app_id: "1:384928842494:android:0c62680350696b92235baf"
         ios:
