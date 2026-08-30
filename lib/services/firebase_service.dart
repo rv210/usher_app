@@ -660,27 +660,38 @@ class FirebaseService extends ChangeNotifier {
     final formatted = rawPhone.startsWith('+') ? rawPhone : '+1$cleanPhone';
 
     try {
-      final collections = ['team', 'users', 'ushers', 'roster'];
       TeamMember? matchedMember;
 
-      for (var colName in collections) {
-        final snap = await _db.collection(colName).get();
-        for (var doc in snap.docs) {
-          final m = TeamMember.fromMap(doc.data(), doc.id);
-          final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-          if (userPhone.isNotEmpty &&
-              (userPhone == cleanPhone || userPhone.endsWith(cleanPhone) || cleanPhone.endsWith(userPhone))) {
-            matchedMember = m;
-            break;
-          }
+      // 1. Check in-memory live roster
+      for (final m in _liveRoster) {
+        final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
+        if (userPhone.isNotEmpty &&
+            (userPhone == cleanPhone || userPhone.endsWith(cleanPhone) || cleanPhone.endsWith(userPhone))) {
+          matchedMember = m;
+          break;
         }
-        if (matchedMember != null) break;
       }
 
+      // 2. Safe query of Firestore collections if in-memory lookup was empty
       if (matchedMember == null) {
-        _authLoading = false;
-        notifyListeners();
-        throw Exception("No registered usher found matching phone number $rawPhone.");
+        final collections = ['team', 'users', 'ushers', 'roster'];
+        for (var colName in collections) {
+          try {
+            final snap = await _db.collection(colName).get();
+            for (var doc in snap.docs) {
+              final m = TeamMember.fromMap(doc.data(), doc.id);
+              final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
+              if (userPhone.isNotEmpty &&
+                  (userPhone == cleanPhone || userPhone.endsWith(cleanPhone) || cleanPhone.endsWith(userPhone))) {
+                matchedMember = m;
+                break;
+              }
+            }
+          } catch (_) {
+            // Unauthenticated read might be restricted by rules; proceed to SMS auth
+          }
+          if (matchedMember != null) break;
+        }
       }
 
       _pendingPhone = rawPhone;
@@ -695,8 +706,13 @@ class FirebaseService extends ChangeNotifier {
         return;
       }
 
-      // Native platforms report success/failure via callbacks, so bridge
-      // them into a Future the caller can actually await and react to.
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+        _authLoading = false;
+        notifyListeners();
+        throw Exception("SMS verification is designed for mobile devices (iOS & Android). On Windows Desktop, please use 'Sign In with Email' or 'Register'.");
+      }
+
+      // Native mobile platforms report success/failure via callbacks
       final completer = Completer<void>();
       await _auth.verifyPhoneNumber(
         phoneNumber: formatted,
@@ -704,7 +720,12 @@ class FirebaseService extends ChangeNotifier {
           try {
             final userCred = await _auth.signInWithCredential(credential);
             _currentUser = userCred.user;
-            _userProfile = matchedMember;
+            if (_currentUser != null) {
+              _loadUserProfile(_currentUser!.uid);
+            }
+            if (_userProfile == null && matchedMember != null) {
+              _userProfile = matchedMember;
+            }
             _pendingPhone = null;
             _pendingPhoneMember = null;
             _phoneCodeSent = false;
@@ -783,7 +804,10 @@ class FirebaseService extends ChangeNotifier {
       }
 
       _currentUser = signedInUser;
-      if (_pendingPhoneMember != null) {
+      if (signedInUser != null) {
+        _loadUserProfile(signedInUser.uid);
+      }
+      if (_userProfile == null && _pendingPhoneMember != null) {
         _userProfile = _pendingPhoneMember;
       }
 

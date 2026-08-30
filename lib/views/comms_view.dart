@@ -70,157 +70,176 @@ class _CommsViewState extends State<CommsView> {
   @override
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
+    final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final composerBottomPadding = isKeyboardOpen ? 12.0 : 92.0;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Team Comms Feed")),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Messages List
-            Expanded(
-              child: firebaseService.commsMessages.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No messages yet",
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+        bottom: false,
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          onVerticalDragUpdate: (details) {
+            if (details.primaryDelta != null && details.primaryDelta! > 6) {
+              FocusScope.of(context).unfocus();
+            }
+          },
+          behavior: HitTestBehavior.translucent,
+          child: Column(
+            children: [
+              // Messages List
+              Expanded(
+                child: firebaseService.commsMessages.isEmpty
+                    ? Center(
+                        child: Text(
+                          "No messages yet",
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-                      itemCount: firebaseService.commsMessages.length,
-                      itemBuilder: (context, index) {
-                        final msg = firebaseService.commsMessages[index];
-                        final isMine =
-                            msg.authorUid != null &&
-                            msg.authorUid == firebaseService.currentUser?.uid;
-                        final timestamp = _parseTimestamp(msg.createdAt);
-                        final previous = index > 0
-                            ? firebaseService.commsMessages[index - 1]
-                            : null;
-                        final previousTimestamp = _parseTimestamp(
-                          previous?.createdAt,
-                        );
-                        final showDateHeader =
-                            timestamp != null &&
-                            (previousTimestamp == null ||
-                                !_isSameDay(timestamp, previousTimestamp));
-                        final showSenderName =
-                            !isMine &&
-                            (previous == null ||
-                                previous.authorUid != msg.authorUid ||
-                                showDateHeader);
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                        itemCount: firebaseService.commsMessages.length,
+                        itemBuilder: (context, index) {
+                          final msg = firebaseService.commsMessages[index];
+                          final isMine =
+                              msg.authorUid != null &&
+                              msg.authorUid == firebaseService.currentUser?.uid;
+                          final timestamp = _parseTimestamp(msg.createdAt);
+                          final previous = index > 0
+                              ? firebaseService.commsMessages[index - 1]
+                              : null;
+                          final previousTimestamp = _parseTimestamp(
+                            previous?.createdAt,
+                          );
+                          final showDateHeader =
+                              timestamp != null &&
+                              (previousTimestamp == null ||
+                                  !_isSameDay(timestamp, previousTimestamp));
+                          final showSenderName =
+                              !isMine &&
+                              (previous == null ||
+                                  previous.authorUid != msg.authorUid ||
+                                  showDateHeader);
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (showDateHeader)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    _formatDateHeader(timestamp),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: context.textSecondaryColor,
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (showDateHeader)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _formatDateHeader(timestamp),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: context.textSecondaryColor,
+                                      ),
                                     ),
                                   ),
                                 ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: _ChatBubbleRow(
+                                  message: msg,
+                                  isMine: isMine,
+                                  showSenderName: showSenderName,
+                                  timeLabel: timestamp != null
+                                      ? DateFormat('h:mm a').format(timestamp)
+                                      : null,
+                                  onEdit: isMine
+                                      ? () => _showEditMessageDialog(
+                                          context,
+                                          firebaseService,
+                                          msg,
+                                        )
+                                      : null,
+                                  onDelete: isMine
+                                      ? () => _confirmDeleteMessage(
+                                          context,
+                                          firebaseService,
+                                          msg.id,
+                                        )
+                                      : null,
+                                ),
                               ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: _ChatBubbleRow(
-                                message: msg,
-                                isMine: isMine,
-                                showSenderName: showSenderName,
-                                timeLabel: timestamp != null
-                                    ? DateFormat('h:mm a').format(timestamp)
-                                    : null,
-                                onEdit: isMine
-                                    ? () => _showEditMessageDialog(
-                                        context,
-                                        firebaseService,
-                                        msg,
-                                      )
-                                    : null,
-                                onDelete: isMine
-                                    ? () => _confirmDeleteMessage(
-                                        context,
-                                        firebaseService,
-                                        msg.id,
-                                      )
-                                    : null,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-            ),
+                            ],
+                          );
+                        },
+                      ),
+              ),
 
-            // Message Composer Input Box
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: DribbbleGlassContainer(
-                borderRadius: 24,
-                padding: const EdgeInsets.all(8),
-                blur: 20,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        maxLines: 3,
-                        minLines: 1,
-                        decoration: const InputDecoration(
-                          hintText: "Post an update for the team...",
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          fillColor: Colors.transparent,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
+              // Message Composer Input Box
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.fromLTRB(16, 8, 16, composerBottomPadding),
+                child: DribbbleGlassContainer(
+                  borderRadius: 24,
+                  padding: const EdgeInsets.all(8),
+                  blur: 20,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          maxLines: 3,
+                          minLines: 1,
+                          decoration: const InputDecoration(
+                            hintText: "Post an update for the team...",
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            fillColor: Colors.transparent,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _sendMessage(firebaseService),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          gradient: context.activeGradient,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(
-                                context,
-                              ).primaryColor.withValues(alpha: 0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          LucideIcons.send,
-                          color: Colors.white,
-                          size: 20,
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _sendMessage(firebaseService),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            gradient: context.activeGradient,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(
+                                  context,
+                                ).primaryColor.withValues(alpha: 0.4),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            LucideIcons.send,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
