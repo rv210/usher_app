@@ -73,7 +73,7 @@ class FirebaseService extends ChangeNotifier {
 
   // Tally Counter live state
   int _currentTallyCount = 0;
-  String _activeServiceType = 'Sunday Morning Service';
+  String _activeServiceType = 'Sunday Service';
 
   // Getters
   User? get currentUser => _currentUser;
@@ -527,6 +527,7 @@ class FirebaseService extends ChangeNotifier {
     required String station,
     required String usherName,
     required String serviceType,
+    String? customEventName,
     String? usherId,
     String? role,
     String? date,
@@ -537,6 +538,7 @@ class FirebaseService extends ChangeNotifier {
       usherId: usherId ?? 'u_${DateTime.now().millisecondsSinceEpoch}',
       usherName: usherName,
       serviceType: serviceType,
+      customEventName: customEventName,
       station: station,
       role: role ?? 'Assigned Usher',
       verified: true,
@@ -618,11 +620,81 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
+  bool _pendingTwoFactor = false;
+  String? _pendingTwoFactorPhone;
+  bool _twoFactorCodeSent = false;
+  String? _twoFactorVerificationId;
+  ConfirmationResult? _twoFactorWebResult;
+  String? _twoFactorError;
+
+  bool get pendingTwoFactor => _pendingTwoFactor;
+  String? get pendingTwoFactorPhone => _pendingTwoFactorPhone;
+  bool get twoFactorCodeSent => _twoFactorCodeSent;
+  String? get twoFactorError => _twoFactorError;
+
+  Future<void> toggleTwoFactorAuth(bool enable, {String? phone}) async {
+    if (_currentUser == null) return;
+    final uid = _currentUser!.uid;
+    final targetPhone = phone ?? _userProfile?.phone;
+
+    if (enable && (targetPhone == null || targetPhone.trim().isEmpty)) {
+      throw Exception("Please provide a valid mobile phone number for 2FA SMS security.");
+    }
+
+    final updateData = {
+      'twoFactorEnabled': enable,
+      if (targetPhone != null) 'twoFactorPhone': targetPhone.trim(),
+    };
+
+    if (_userProfile != null) {
+      _userProfile = TeamMember(
+        id: _userProfile!.id,
+        name: _userProfile!.name,
+        email: _userProfile!.email,
+        phone: _userProfile!.phone,
+        role: _userProfile!.role,
+        approved: _userProfile!.approved,
+        denied: _userProfile!.denied,
+        createdAt: _userProfile!.createdAt,
+        linkedTo: _userProfile!.linkedTo,
+        fcmToken: _userProfile!.fcmToken,
+        twoFactorEnabled: enable,
+        twoFactorPhone: targetPhone,
+      );
+      notifyListeners();
+    }
+
+    await _writeTeamDoc(uid, updateData);
+  }
+
   Future<bool> signIn(String email, String password) async {
     _authLoading = true;
+    _pendingTwoFactor = false;
+    _twoFactorCodeSent = false;
+    _twoFactorError = null;
     notifyListeners();
+
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final uid = cred.user!.uid;
+
+      // Check if user has 2FA enabled
+      final doc = await _db.collection('team').doc(uid).get();
+      if (doc.exists) {
+        final profile = TeamMember.fromMap(doc.data()!, doc.id);
+        if (profile.twoFactorEnabled && ((profile.twoFactorPhone ?? profile.phone)?.isNotEmpty ?? false)) {
+          final phone = profile.twoFactorPhone ?? profile.phone!;
+          _pendingTwoFactor = true;
+          _pendingTwoFactorPhone = phone;
+          _userProfile = profile;
+
+          await sendTwoFactorSmsCode(phone);
+          _authLoading = false;
+          notifyListeners();
+          return false; // 2FA Challenge required
+        }
+      }
+
       _authLoading = false;
       notifyListeners();
       return true;
@@ -632,6 +704,133 @@ class FirebaseService extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<void> sendTwoFactorSmsCode(String rawPhone) async {
+    _authLoading = true;
+    _twoFactorError = null;
+    notifyListeners();
+
+    final cleanPhone = rawPhone.replaceAll(RegExp(r'[^\d]'), '');
+    final formatted = rawPhone.startsWith('+') ? rawPhone : '+1$cleanPhone';
+
+    if (kIsWeb) {
+      try {
+        _twoFactorWebResult = await _auth.signInWithPhoneNumber(formatted);
+        _twoFactorCodeSent = true;
+        _authLoading = false;
+        notifyListeners();
+        return;
+      } catch (e) {
+        _twoFactorError = "Couldn't send 2FA SMS code: $e";
+        _authLoading = false;
+        notifyListeners();
+        return;
+      }
+    }
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      _twoFactorCodeSent = true;
+      _authLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    final completer = Completer<void>();
+    await _auth.verifyPhoneNumber(
+      phoneNumber: formatted,
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        _twoFactorCodeSent = true;
+        _authLoading = false;
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        _twoFactorError = e.message ?? "2FA SMS dispatch failed.";
+        _authLoading = false;
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      codeSent: (verId, _) {
+        _twoFactorVerificationId = verId;
+        _twoFactorCodeSent = true;
+        _authLoading = false;
+        notifyListeners();
+        if (!completer.isCompleted) completer.complete();
+      },
+      codeAutoRetrievalTimeout: (verId) {
+        _twoFactorVerificationId = verId;
+      },
+    );
+    await completer.future;
+  }
+
+  Future<bool> verifyTwoFactorSmsCode(String code) async {
+    _authLoading = true;
+    _twoFactorError = null;
+    notifyListeners();
+
+    final cleanCode = code.trim();
+    if (cleanCode.isEmpty) {
+      _authLoading = false;
+      notifyListeners();
+      throw Exception("Please enter the 6-digit 2FA security code.");
+    }
+
+    try {
+      if (kIsWeb && _twoFactorWebResult != null) {
+        await _twoFactorWebResult!.confirm(cleanCode);
+      } else if (_twoFactorVerificationId != null) {
+        final credential = PhoneAuthProvider.credential(
+          verificationId: _twoFactorVerificationId!,
+          smsCode: cleanCode,
+        );
+        try {
+          await _currentUser?.linkWithCredential(credential);
+        } catch (_) {
+          // If already linked, sign in directly with credential
+          try {
+            await _auth.signInWithCredential(credential);
+          } catch (_) {}
+        }
+      }
+
+      _pendingTwoFactor = false;
+      _pendingTwoFactorPhone = null;
+      _twoFactorCodeSent = false;
+      _twoFactorVerificationId = null;
+      _twoFactorWebResult = null;
+      _twoFactorError = null;
+
+      if (_currentUser != null) {
+        _loadUserProfile(_currentUser!.uid);
+      }
+
+      _authLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _authLoading = false;
+      notifyListeners();
+      throw Exception(e.code == 'invalid-verification-code'
+          ? "The 2FA security code is incorrect. Please check and try again."
+          : (e.message ?? "2FA verification failed."));
+    } catch (e) {
+      _authLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  void cancelTwoFactorVerification() {
+    _pendingTwoFactor = false;
+    _pendingTwoFactorPhone = null;
+    _twoFactorCodeSent = false;
+    _twoFactorVerificationId = null;
+    _twoFactorWebResult = null;
+    _twoFactorError = null;
+    _auth.signOut();
+    notifyListeners();
   }
 
   ConfirmationResult? _webConfirmationResult;
@@ -645,58 +844,75 @@ class FirebaseService extends ChangeNotifier {
   bool get phoneCodeSent => _phoneCodeSent;
   String? get phoneAuthError => _phoneAuthError;
 
+  String _normalizePhoneDigits(String? raw) {
+    if (raw == null) return '';
+    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+    if (digits.length == 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
+    return digits;
+  }
+
+  bool _phonesMatch(String? p1, String? p2) {
+    final d1 = _normalizePhoneDigits(p1);
+    final d2 = _normalizePhoneDigits(p2);
+    if (d1.isEmpty || d2.isEmpty) return false;
+    return d1 == d2 || (d1.length >= 7 && d2.length >= 7 && (d1.endsWith(d2) || d2.endsWith(d1)));
+  }
+
+  Future<TeamMember?> findProfileByPhone(String rawPhone) async {
+    final cleanPhone = _normalizePhoneDigits(rawPhone);
+    if (cleanPhone.isEmpty || cleanPhone.length < 7) return null;
+
+    // 1. Check in-memory live roster
+    for (final m in _liveRoster) {
+      if (_phonesMatch(m.phone, rawPhone) || _phonesMatch(m.twoFactorPhone, rawPhone)) {
+        return m;
+      }
+    }
+
+    // 2. Query Firestore collections
+    final collections = ['team', 'users', 'ushers', 'team_members', 'roster'];
+    for (final col in collections) {
+      try {
+        final snap = await _db.collection(col).get();
+        for (final doc in snap.docs) {
+          final m = TeamMember.fromMap(doc.data(), doc.id);
+          if (_phonesMatch(m.phone, rawPhone) || _phonesMatch(m.twoFactorPhone, rawPhone)) {
+            return m;
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   Future<void> sendPhoneSecurityCode(String rawPhone) async {
     _authLoading = true;
     _phoneAuthError = null;
     notifyListeners();
 
-    final cleanPhone = rawPhone.replaceAll(RegExp(r'[^\d]'), '');
+    final cleanPhone = _normalizePhoneDigits(rawPhone);
     if (cleanPhone.isEmpty || cleanPhone.length < 7) {
       _authLoading = false;
       notifyListeners();
-      throw Exception("Please enter a valid phone number.");
+      throw Exception("Please enter a valid 10-digit phone number.");
     }
 
-    final formatted = rawPhone.startsWith('+') ? rawPhone : '+1$cleanPhone';
-
     try {
-      TeamMember? matchedMember;
-
-      // 1. Check in-memory live roster
-      for (final m in _liveRoster) {
-        final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-        if (userPhone.isNotEmpty &&
-            (userPhone == cleanPhone || userPhone.endsWith(cleanPhone) || cleanPhone.endsWith(userPhone))) {
-          matchedMember = m;
-          break;
-        }
-      }
-
-      // 2. Safe query of Firestore collections if in-memory lookup was empty
+      // 1. Strict Usher Profile Check: Require phone to exist in an usher profile
+      final matchedMember = await findProfileByPhone(rawPhone);
       if (matchedMember == null) {
-        final collections = ['team', 'users', 'ushers', 'roster'];
-        for (var colName in collections) {
-          try {
-            final snap = await _db.collection(colName).get();
-            for (var doc in snap.docs) {
-              final m = TeamMember.fromMap(doc.data(), doc.id);
-              final userPhone = (m.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-              if (userPhone.isNotEmpty &&
-                  (userPhone == cleanPhone || userPhone.endsWith(cleanPhone) || cleanPhone.endsWith(userPhone))) {
-                matchedMember = m;
-                break;
-              }
-            }
-          } catch (_) {
-            // Unauthenticated read might be restricted by rules; proceed to SMS auth
-          }
-          if (matchedMember != null) break;
-        }
+        _authLoading = false;
+        notifyListeners();
+        throw Exception("No usher profile found for $rawPhone. Please sign in with your email and password.");
       }
 
       _pendingPhone = rawPhone;
       _pendingPhoneMember = matchedMember;
       _phoneCodeSent = false;
+
+      final formatted = rawPhone.startsWith('+') ? rawPhone : '+1$cleanPhone';
 
       if (kIsWeb) {
         _webConfirmationResult = await _auth.signInWithPhoneNumber(formatted);
@@ -721,10 +937,22 @@ class FirebaseService extends ChangeNotifier {
             final userCred = await _auth.signInWithCredential(credential);
             _currentUser = userCred.user;
             if (_currentUser != null) {
-              _loadUserProfile(_currentUser!.uid);
-            }
-            if (_userProfile == null && matchedMember != null) {
-              _userProfile = matchedMember;
+              final linked = TeamMember(
+                id: _currentUser!.uid,
+                name: matchedMember.name,
+                email: matchedMember.email,
+                phone: matchedMember.phone?.isNotEmpty == true ? matchedMember.phone : _pendingPhone,
+                role: matchedMember.role,
+                approved: matchedMember.approved,
+                denied: matchedMember.denied,
+                createdAt: matchedMember.createdAt,
+                linkedTo: matchedMember.id,
+                fcmToken: matchedMember.fcmToken,
+                twoFactorEnabled: matchedMember.twoFactorEnabled,
+                twoFactorPhone: matchedMember.twoFactorPhone,
+              );
+              _userProfile = linked;
+              await _writeTeamDoc(_currentUser!.uid, linked.toMap());
             }
             _pendingPhone = null;
             _pendingPhoneMember = null;
@@ -805,10 +1033,27 @@ class FirebaseService extends ChangeNotifier {
 
       _currentUser = signedInUser;
       if (signedInUser != null) {
-        _loadUserProfile(signedInUser.uid);
-      }
-      if (_userProfile == null && _pendingPhoneMember != null) {
-        _userProfile = _pendingPhoneMember;
+        if (_pendingPhoneMember != null) {
+          final original = _pendingPhoneMember!;
+          final linked = TeamMember(
+            id: signedInUser.uid,
+            name: original.name,
+            email: original.email,
+            phone: original.phone?.isNotEmpty == true ? original.phone : _pendingPhone,
+            role: original.role,
+            approved: original.approved,
+            denied: original.denied,
+            createdAt: original.createdAt,
+            linkedTo: original.id,
+            fcmToken: original.fcmToken,
+            twoFactorEnabled: original.twoFactorEnabled,
+            twoFactorPhone: original.twoFactorPhone,
+          );
+          _userProfile = linked;
+          await _writeTeamDoc(signedInUser.uid, linked.toMap());
+        } else {
+          _loadUserProfile(signedInUser.uid);
+        }
       }
 
       _pendingPhone = null;
@@ -1076,20 +1321,45 @@ class FirebaseService extends ChangeNotifier {
           }
         }
       } else if (_currentUser != null) {
-        final email = _currentUser!.email ?? '';
-        final name = (_currentUser!.displayName != null && _currentUser!.displayName!.trim().isNotEmpty)
-            ? _currentUser!.displayName!.trim()
-            : (email.contains('@') ? email.split('@').first : 'Usher');
-        _userProfile = TeamMember(
-          id: uid,
-          name: name,
-          email: email,
-          phone: '',
-          role: 'Admin',
-          approved: true,
-          createdAt: DateTime.now().toIso8601String(),
-        );
-        await _writeTeamDoc(uid, _userProfile!.toMap());
+        TeamMember? matched;
+        if (_currentUser!.phoneNumber != null && _currentUser!.phoneNumber!.isNotEmpty) {
+          matched = await findProfileByPhone(_currentUser!.phoneNumber!);
+        }
+        if (matched != null) {
+          final linked = TeamMember(
+            id: uid,
+            name: matched.name,
+            email: matched.email,
+            phone: matched.phone?.isNotEmpty == true ? matched.phone : _currentUser!.phoneNumber,
+            role: matched.role,
+            approved: matched.approved,
+            denied: matched.denied,
+            createdAt: matched.createdAt,
+            linkedTo: matched.id,
+            fcmToken: matched.fcmToken,
+            twoFactorEnabled: matched.twoFactorEnabled,
+            twoFactorPhone: matched.twoFactorPhone,
+          );
+          _userProfile = linked;
+          await _writeTeamDoc(uid, linked.toMap());
+        } else {
+          final email = _currentUser!.email ?? '';
+          if (email.isNotEmpty) {
+            final name = (_currentUser!.displayName != null && _currentUser!.displayName!.trim().isNotEmpty)
+                ? _currentUser!.displayName!.trim()
+                : (email.contains('@') ? email.split('@').first : 'Usher');
+            _userProfile = TeamMember(
+              id: uid,
+              name: name,
+              email: email,
+              phone: '',
+              role: 'Admin',
+              approved: true,
+              createdAt: DateTime.now().toIso8601String(),
+            );
+            await _writeTeamDoc(uid, _userProfile!.toMap());
+          }
+        }
       }
     } catch (_) {}
     _authLoading = false;

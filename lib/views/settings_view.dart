@@ -40,6 +40,122 @@ class _SettingsViewState extends State<SettingsView> {
     }
   }
 
+  Future<void> _onTwoFactorToggled(bool value, FirebaseService firebaseService) async {
+    final profile = firebaseService.userProfile;
+    if (!value) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Text("Disable 2FA?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          content: Text("Are you sure you want to remove SMS two-step verification from your account?", style: GoogleFonts.inter(fontSize: 14)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Disable 2FA", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (confirm == true) {
+        try {
+          await firebaseService.toggleTwoFactorAuth(false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Two-Factor Authentication disabled.")),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+          }
+        }
+      }
+      return;
+    }
+
+    final existingPhone = profile?.twoFactorPhone ?? profile?.phone ?? '';
+    final phoneController = TextEditingController(text: existingPhone);
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            const Icon(LucideIcons.shieldCheck, color: AppColors.secondary, size: 22),
+            const SizedBox(width: 8),
+            Text("Enable SMS 2FA", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "When enabled, signing in will require entering a 6-digit SMS security code sent to your phone number.",
+              style: GoogleFonts.inter(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Text("Mobile Phone Number", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                hintText: "(555) 000-0000",
+                prefixIcon: Icon(LucideIcons.phone, size: 18),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Activate 2FA"),
+          ),
+        ],
+      ),
+    );
+
+    if (proceed == true) {
+      final phone = phoneController.text.trim();
+      if (phone.isEmpty || phone.replaceAll(RegExp(r'[^\d]'), '').length < 7) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Please enter a valid phone number for SMS 2FA.")),
+          );
+        }
+        return;
+      }
+
+      try {
+        await firebaseService.toggleTwoFactorAuth(true, phone: phone);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(LucideIcons.shieldCheck, color: Colors.white, size: 18),
+                  SizedBox(width: 8),
+                  Text("Two-Factor Authentication is now active!"),
+                ],
+              ),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -72,6 +188,7 @@ class _SettingsViewState extends State<SettingsView> {
         currentName.contains('richardson');
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("App Preferences"),
       ),
@@ -184,6 +301,15 @@ class _SettingsViewState extends State<SettingsView> {
                       value: _notificationsEnabled,
                       activeThumbColor: Theme.of(context).colorScheme.secondary,
                       onChanged: (val) => setState(() => _notificationsEnabled = val),
+                    ),
+                    Divider(height: 1, color: context.borderThemeColor),
+                    SwitchListTile(
+                      title: Text("Two-Factor Authentication (2FA)", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                      subtitle: Text("Require 6-digit SMS verification code on sign-in", style: GoogleFonts.inter(fontSize: 12)),
+                      secondary: Icon(LucideIcons.shieldCheck, color: profile?.twoFactorEnabled == true ? AppColors.success : Theme.of(context).primaryColor),
+                      value: profile?.twoFactorEnabled ?? false,
+                      activeThumbColor: AppColors.success,
+                      onChanged: (val) => _onTwoFactorToggled(val, firebaseService),
                     ),
                     if (_biometricAvailable) ...[
                       Divider(height: 1, color: context.borderThemeColor),

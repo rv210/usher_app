@@ -46,6 +46,7 @@ class _AdminApprovalViewState extends State<AdminApprovalView> {
     }
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("Admin Portal"),
         actions: [

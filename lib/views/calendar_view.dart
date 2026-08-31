@@ -19,9 +19,8 @@ class _CalendarViewState extends State<CalendarView> {
   String _selectedServiceFilter = 'All';
   DateTime _focusedMonth = DateTime.now();
   DateTime? _selectedSunday;
-  bool _sundaysOnlyFilter = false;
 
-  final List<String> _serviceFilters = ['All', 'Sundays Only', 'Sunday Morning Service', 'Communion Service', 'Mid-week Rallies'];
+  final List<String> _serviceFilters = ['All', 'Sunday Service', 'Special Events', 'Communion Service'];
 
   List<DateTime> _getSundaysForMonth(DateTime monthDate) {
     final sundays = <DateTime>[];
@@ -55,8 +54,24 @@ class _CalendarViewState extends State<CalendarView> {
         }
       }
 
-      if (_sundaysOnlyFilter || _selectedServiceFilter == 'Sundays Only') {
-        if (!d.serviceType.toLowerCase().contains('sunday') && d.serviceType != 'Sunday Morning Service') {
+      if (_selectedServiceFilter == 'Sunday Service') {
+        if (d.serviceType != 'Sunday Service' &&
+            d.serviceType != 'Sunday Morning Service' &&
+            !d.serviceType.toLowerCase().contains('sunday')) {
+          return false;
+        }
+      } else if (_selectedServiceFilter == 'Special Events') {
+        if (d.serviceType != 'Special Events' &&
+            d.serviceType != 'Special Event / Concert' &&
+            !d.serviceType.toLowerCase().contains('special') &&
+            !d.serviceType.toLowerCase().contains('event') &&
+            !d.serviceType.toLowerCase().contains('rally') &&
+            !d.serviceType.toLowerCase().contains('rallies')) {
+          return false;
+        }
+      } else if (_selectedServiceFilter == 'Communion Service') {
+        if (d.serviceType != 'Communion Service' &&
+            !d.serviceType.toLowerCase().contains('communion')) {
           return false;
         }
       } else if (_selectedServiceFilter != 'All') {
@@ -67,6 +82,7 @@ class _CalendarViewState extends State<CalendarView> {
 
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("Duty Roster & Deployments"),
         actions: [
@@ -410,8 +426,19 @@ class _CalendarViewState extends State<CalendarView> {
                               Row(
                                 children: [
                                   DribbblePillBadge(
-                                    label: dep.serviceType,
-                                    color: Theme.of(context).primaryColor,
+                                    label: dep.customEventName != null && dep.customEventName!.isNotEmpty
+                                        ? "${dep.serviceType}: ${dep.customEventName}"
+                                        : dep.serviceType,
+                                    icon: dep.serviceType.toLowerCase().contains('communion')
+                                        ? LucideIcons.wine
+                                        : (dep.serviceType.toLowerCase().contains('special')
+                                            ? LucideIcons.sparkles
+                                            : LucideIcons.church),
+                                    color: dep.serviceType.toLowerCase().contains('communion')
+                                        ? AppColors.danger
+                                        : (dep.serviceType.toLowerCase().contains('special')
+                                            ? AppColors.accent
+                                            : Theme.of(context).primaryColor),
                                   ),
                                   const Spacer(),
                                   Row(
@@ -633,6 +660,8 @@ class _CalendarViewState extends State<CalendarView> {
                         children: [
                           Text("Station: ${dep.station}", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
                           const SizedBox(height: 2),
+                          Text("Service: ${dep.serviceType}${dep.customEventName != null && dep.customEventName!.isNotEmpty ? ' (${dep.customEventName})' : ''} • ${dep.date}", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondaryLight)),
+                          const SizedBox(height: 2),
                           Text("Currently Assigned: ${dep.usherName}", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondaryLight)),
                         ],
                       ),
@@ -641,7 +670,7 @@ class _CalendarViewState extends State<CalendarView> {
                     Text("Select Replacement (Sub-In):", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<TeamMember?>(
-                      value: selectedMember,
+                      initialValue: selectedMember,
                       decoration: const InputDecoration(
                         prefixIcon: Icon(LucideIcons.userCheck, size: 18),
                       ),
@@ -675,7 +704,7 @@ class _CalendarViewState extends State<CalendarView> {
                     Text("Duty Role:", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: selectedRole,
+                      initialValue: selectedRole,
                       decoration: const InputDecoration(
                         prefixIcon: Icon(LucideIcons.shield, size: 18),
                       ),
@@ -742,7 +771,12 @@ class _CalendarViewState extends State<CalendarView> {
     TeamMember? selectedMember = roster.isNotEmpty ? roster.first : null;
     final customNameController = TextEditingController();
     final customStationController = TextEditingController();
+    final customEventController = TextEditingController();
     final dateController = TextEditingController(text: _getNextSundayDateString());
+
+    String selectedServiceType = _selectedServiceFilter == 'All' || _selectedServiceFilter == 'Sundays Only'
+        ? 'Sunday Service'
+        : _selectedServiceFilter;
 
     String selectedRole = (selectedMember != null && selectedMember.isLead)
         ? 'Lead Usher (Sunday Lead)'
@@ -776,6 +810,66 @@ class _CalendarViewState extends State<CalendarView> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Service Type Selector
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedServiceType,
+                      decoration: const InputDecoration(
+                        labelText: "Service Type",
+                        prefixIcon: Icon(LucideIcons.church, size: 18),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Sunday Service',
+                          child: Row(
+                            children: [
+                              Icon(LucideIcons.sun, size: 16, color: AppColors.amber),
+                              SizedBox(width: 8),
+                              Text('Sunday Service'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Special Events',
+                          child: Row(
+                            children: [
+                              Icon(LucideIcons.sparkles, size: 16, color: AppColors.accent),
+                              SizedBox(width: 8),
+                              Text('Special Events'),
+                            ],
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Communion Service',
+                          child: Row(
+                            children: [
+                              Icon(LucideIcons.wine, size: 16, color: AppColors.danger),
+                              SizedBox(width: 8),
+                              Text('Communion Service'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() {
+                            selectedServiceType = val;
+                          });
+                        }
+                      },
+                    ),
+                    if (selectedServiceType == 'Special Events') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: customEventController,
+                        decoration: const InputDecoration(
+                          labelText: "Event Name (Optional)",
+                          hintText: "e.g. Easter Concert, Revival, Conference",
+                          prefixIcon: Icon(LucideIcons.calendarCheck, size: 18),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+
                     // Select Usher from User Database
                     if (roster.isNotEmpty) ...[
                       DropdownButtonFormField<TeamMember>(
@@ -963,7 +1057,10 @@ class _CalendarViewState extends State<CalendarView> {
                         usherId: usherId,
                         role: selectedRole,
                         date: dateController.text.trim(),
-                        serviceType: _selectedServiceFilter == 'All' ? 'Sunday Morning Service' : _selectedServiceFilter,
+                        serviceType: selectedServiceType,
+                        customEventName: selectedServiceType == 'Special Events' && customEventController.text.trim().isNotEmpty
+                            ? customEventController.text.trim()
+                            : null,
                       );
                       Navigator.pop(ctx);
                     }

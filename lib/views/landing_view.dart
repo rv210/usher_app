@@ -110,11 +110,15 @@ class LandingView extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    "Event Usher Portal",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: context.textSecondaryColor,
+                                  Flexible(
+                                    child: Text(
+                                      "Event Usher Portal",
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: context.textSecondaryColor,
+                                      ),
                                     ),
                                   ),
                                 ],

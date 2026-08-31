@@ -1,30 +1,65 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:usher_app/main.dart';
+import 'package:usher_app/theme/app_theme.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const UsherApp());
+  testWidgets('DribbbleGlassContainer renders child and responds to tap', (WidgetTester tester) async {
+    bool tapped = false;
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DribbbleGlassContainer(
+            onTap: () => tapped = true,
+            padding: const EdgeInsets.all(16),
+            child: const Text('Guardians Usher Portal'),
+          ),
+        ),
+      ),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(find.text('Guardians Usher Portal'), findsOneWidget);
+
+    await tester.tap(find.text('Guardians Usher Portal'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('DribbbleGlowButton renders label and triggers callback', (WidgetTester tester) async {
+    bool pressed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DribbbleGlowButton(
+            label: 'Submit Headcount',
+            onPressed: () => pressed = true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Submit Headcount'), findsOneWidget);
+
+    await tester.tap(find.text('Submit Headcount'));
+    await tester.pump();
+
+    expect(pressed, isTrue);
+  });
+
+  testWidgets('DribbblePillBadge displays label text accurately', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DribbblePillBadge(
+            label: 'ADMIN APPROVED',
+            color: Colors.green,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('ADMIN APPROVED'), findsOneWidget);
   });
 }

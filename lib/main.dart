@@ -198,7 +198,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return PendingDeniedView(isDenied: profile.denied);
     }
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isWideScreen = MediaQuery.of(context).size.width >= 800;
 
     final List<Widget> pages = [
@@ -336,22 +335,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
     final activeGradient = context.activeGradient;
 
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+
     return _withEdgeSwipeBack(Scaffold(
       extendBody: true,
+      resizeToAvoidBottomInset: true,
       body: DribbbleAmbientBackground(
         child: IndexedStack(
           index: _currentTab,
           children: pages,
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: DribbbleGlassContainer(
-            borderRadius: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            blur: 20,
-            child: Row(
+      bottomNavigationBar: isKeyboardVisible
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: DribbbleGlassContainer(
+                  borderRadius: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  blur: 20,
+                  child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(navItems.length, (index) {
                 final isSelected = _currentTab == index;

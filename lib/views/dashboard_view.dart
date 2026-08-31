@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/deployment.dart';
-import '../models/training_module.dart';
 import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
 import 'ushering_training_view.dart';
@@ -193,6 +192,7 @@ class _DashboardViewState extends State<DashboardView> {
         currentName.contains('richardson');
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
@@ -425,7 +425,7 @@ class _DashboardViewState extends State<DashboardView> {
 
                 const SizedBox(height: 24),
 
-                // Ushering 101 Training Section
+                // Ministry Handbook & SOP Training Section
                 Text(
                   "Training & Resources",
                   style: GoogleFonts.outfit(
@@ -465,7 +465,7 @@ class _DashboardViewState extends State<DashboardView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Ushering 101",
+                              "Ministry Handbook & Training",
                               style: GoogleFonts.outfit(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -474,9 +474,9 @@ class _DashboardViewState extends State<DashboardView> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "by $usheringTrainingAuthor",
+                              "Official Church Guidelines · In-App Reader & Modules",
                               style: GoogleFonts.inter(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: Theme.of(context).primaryColor,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -497,51 +497,100 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
 
                 const SizedBox(height: 24),
-
-                // Duty Deployments Section (Newest Sunday Schedule)
+                // Duty Deployments Section (Newest Upcoming Schedule Only - Never Combine Schedules)
                 Builder(
                   builder: (context) {
                     final allDeployments = firebaseService.deployments;
-                    final now = DateTime.now();
-                    final daysUntilSunday = (DateTime.sunday - now.weekday + 7) % 7;
-                    final upcomingSunday = daysUntilSunday == 0 ? now : now.add(Duration(days: daysUntilSunday));
-                    final sundayStr = DateFormat('yyyy-MM-dd').format(upcomingSunday);
-                    final sundayShortStr = DateFormat('MMM d').format(upcomingSunday);
 
-                    List<Deployment> sundayDeployments = allDeployments.where((d) {
-                      return d.date == sundayStr ||
-                             d.date.contains(sundayShortStr) ||
-                             d.date.contains(DateFormat('MM/dd/yyyy').format(upcomingSunday));
-                    }).toList();
-
-                    final displayList = sundayDeployments.isNotEmpty ? sundayDeployments : allDeployments;
-
-                    final sortedRoster = List<Deployment>.from(displayList)
-                      ..sort((a, b) {
-                        final aLead = a.role.toLowerCase().contains('lead usher') || (a.role.toLowerCase().contains('lead') && !a.role.toLowerCase().contains('head'));
-                        final bLead = b.role.toLowerCase().contains('lead usher') || (b.role.toLowerCase().contains('lead') && !b.role.toLowerCase().contains('head'));
-                        if (aLead && !bLead) return -1;
-                        if (!aLead && bLead) return 1;
-                        return 0;
-                      });
-
-                    String formattedBadgeDate(String rawDate) {
-                      if (rawDate.isEmpty) return DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase();
+                    DateTime? tryParseDate(String s) {
+                      final trimmed = s.trim();
+                      if (trimmed.isEmpty) return null;
                       try {
-                        if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate)) {
-                          final dt = DateTime.parse(rawDate);
-                          return DateFormat('MMM d, yyyy').format(dt).toUpperCase();
-                        }
-                      } catch (_) {}
-                      return rawDate.toUpperCase();
+                        return DateTime.parse(trimmed);
+                      } catch (_) {
+                        try {
+                          final parts = trimmed.split('/');
+                          if (parts.length == 3) {
+                            return DateTime(int.parse(parts[2]), int.parse(parts[0]), int.parse(parts[1]));
+                          }
+                        } catch (_) {}
+                      }
+                      return null;
                     }
 
-                    final String activeRosterDate = sortedRoster.isNotEmpty ? sortedRoster.first.date : '';
-                    final displayDateTitle = sundayDeployments.isNotEmpty
-                        ? "SUNDAY ROSTER • ${DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase()}"
-                        : (activeRosterDate.isNotEmpty
-                            ? "SUNDAY ROSTER • ${formattedBadgeDate(activeRosterDate)}"
-                            : "SUNDAY ROSTER • ${DateFormat('MMM d, yyyy').format(upcomingSunday).toUpperCase()}");
+                    // 1. Gather all unique non-empty dates
+                    final uniqueDates = <String>{};
+                    for (final d in allDeployments) {
+                      if (d.date.trim().isNotEmpty) {
+                        uniqueDates.add(d.date.trim());
+                      }
+                    }
+
+                    String? targetDate;
+                    DateTime? targetDateTime;
+
+                    if (uniqueDates.isNotEmpty) {
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+
+                      final upcomingDates = <DateTime, String>{};
+                      final pastDates = <DateTime, String>{};
+
+                      for (final raw in uniqueDates) {
+                        final dt = tryParseDate(raw);
+                        if (dt != null) {
+                          final dayOnly = DateTime(dt.year, dt.month, dt.day);
+                          if (dayOnly.isAtSameMomentAs(today) || dayOnly.isAfter(today)) {
+                            upcomingDates[dayOnly] = raw;
+                          } else {
+                            pastDates[dayOnly] = raw;
+                          }
+                        }
+                      }
+
+                      if (upcomingDates.isNotEmpty) {
+                        // Earliest upcoming schedule (the next service on the calendar)
+                        final sortedUpcoming = upcomingDates.keys.toList()..sort((a, b) => a.compareTo(b));
+                        targetDateTime = sortedUpcoming.first;
+                        targetDate = upcomingDates[targetDateTime];
+                      } else if (pastDates.isNotEmpty) {
+                        // If all are past, pick the newest/most recent past schedule
+                        final sortedPast = pastDates.keys.toList()..sort((a, b) => b.compareTo(a));
+                        targetDateTime = sortedPast.first;
+                        targetDate = pastDates[targetDateTime];
+                      } else {
+                        targetDate = uniqueDates.first;
+                      }
+                    }
+
+                    // Strictly filter for the chosen schedule date ONLY (never combining different schedule dates)
+                    final singleScheduleList = targetDate != null
+                        ? allDeployments.where((d) => d.date.trim() == targetDate).toList()
+                        : <Deployment>[];
+
+                    final sortedRoster = List<Deployment>.from(singleScheduleList)
+                      ..sort((a, b) {
+                        final aLead = a.role.toLowerCase().contains('lead usher') ||
+                            (a.role.toLowerCase().contains('lead') && !a.role.toLowerCase().contains('head'));
+                        final bLead = b.role.toLowerCase().contains('lead usher') ||
+                            (b.role.toLowerCase().contains('lead') && !b.role.toLowerCase().contains('head'));
+                        if (aLead && !bLead) return -1;
+                        if (!aLead && bLead) return 1;
+                        return a.station.compareTo(b.station);
+                      });
+
+                    String displayDateTitle = "NO UPCOMING SCHEDULE";
+                    if (sortedRoster.isNotEmpty) {
+                      final first = sortedRoster.first;
+                      final serviceName = first.serviceType.toUpperCase();
+                      final customEvent = (first.customEventName != null && first.customEventName!.trim().isNotEmpty)
+                          ? " (${first.customEventName!.trim().toUpperCase()})"
+                          : "";
+                      final formattedDate = targetDateTime != null
+                          ? DateFormat('MMM d, yyyy').format(targetDateTime).toUpperCase()
+                          : (targetDate != null ? targetDate.toUpperCase() : "");
+                      displayDateTitle = "$serviceName$customEvent • $formattedDate";
+                    }
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,7 +657,7 @@ class _DashboardViewState extends State<DashboardView> {
                                 padding: const EdgeInsets.all(20),
                                 child: Center(
                                   child: Text(
-                                    "No station deployments scheduled for next Sunday yet.",
+                                    "No upcoming station deployments scheduled yet.",
                                     style: GoogleFonts.inter(
                                       fontSize: 13,
                                       color: context.textSecondaryColor,
@@ -620,7 +669,7 @@ class _DashboardViewState extends State<DashboardView> {
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: sortedRoster.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                separatorBuilder: (ctx, i) => const SizedBox(height: 12),
                                 itemBuilder: (context, index) {
                                   final dep = sortedRoster[index];
                                   final roleLower = dep.role.toLowerCase().trim();
@@ -734,7 +783,7 @@ class _DashboardViewState extends State<DashboardView> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 1.4,
+                  childAspectRatio: 1.1,
                   children: [
                     _buildNavCard(
                       context,
@@ -763,7 +812,7 @@ class _DashboardViewState extends State<DashboardView> {
                     _buildNavCard(
                       context,
                       title: "System Settings",
-                      subtitle: "Theme & Preferences",
+                      subtitle: "App & Security",
                       icon: LucideIcons.sliders,
                       gradient: context.activeGradient,
                       onTap: () => widget.onNavigateTab(5),
@@ -788,14 +837,14 @@ class _DashboardViewState extends State<DashboardView> {
   }) {
     return DribbbleGlassContainer(
       borderRadius: 20,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               gradient: gradient,
               borderRadius: BorderRadius.circular(14),
@@ -811,11 +860,14 @@ class _DashboardViewState extends State<DashboardView> {
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.outfit(
-                  fontSize: 15,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.bold,
                   color: context.textPrimaryColor,
                 ),
@@ -823,6 +875,8 @@ class _DashboardViewState extends State<DashboardView> {
               const SizedBox(height: 2),
               Text(
                 subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   color: context.textSecondaryColor,
@@ -835,4 +889,3 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 }
-

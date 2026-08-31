@@ -20,6 +20,13 @@ class _AttendanceViewState extends State<AttendanceView> {
     text: "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}",
   );
 
+  String _normalizeServiceType(String val) {
+    if (val == 'Sunday Morning Service' || val == 'Sunday Morning') return 'Sunday Service';
+    if (val == 'Special Event / Concert' || val == 'Mid-week Rallies') return 'Special Events';
+    if (val == 'Communion') return 'Communion Service';
+    return val;
+  }
+
   @override
   void dispose() {
     _notesController.dispose();
@@ -58,11 +65,10 @@ class _AttendanceViewState extends State<AttendanceView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final firebaseService = Provider.of<FirebaseService>(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("Digital Headcount Tally"),
         actions: [
@@ -209,16 +215,24 @@ class _AttendanceViewState extends State<AttendanceView> {
                   Expanded(
                     flex: 3,
                     child: DropdownButtonFormField<String>(
-                      value: firebaseService.activeServiceType,
+                      initialValue: _normalizeServiceType(firebaseService.activeServiceType),
                       decoration: const InputDecoration(
                         labelText: "Service Type",
                         prefixIcon: Icon(LucideIcons.church, size: 18),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'Sunday Morning Service', child: Text('Sunday Morning')),
-                        DropdownMenuItem(value: 'Communion Service', child: Text('Communion')),
-                        DropdownMenuItem(value: 'Mid-week Rallies', child: Text('Mid-week Rallies')),
-                        DropdownMenuItem(value: 'Special Event / Concert', child: Text('Special Event')),
+                        DropdownMenuItem(
+                          value: 'Sunday Service',
+                          child: Text('Sunday Service'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Special Events',
+                          child: Text('Special Events'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Communion Service',
+                          child: Text('Communion Service'),
+                        ),
                       ],
                       onChanged: (val) {
                         if (val != null) firebaseService.setActiveServiceType(val);
@@ -439,16 +453,24 @@ class _AttendanceViewState extends State<AttendanceView> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: serviceType,
+                      initialValue: _normalizeServiceType(serviceType),
                       decoration: const InputDecoration(
                         labelText: "Service Type",
                         prefixIcon: Icon(LucideIcons.church, size: 18),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'Sunday Morning Service', child: Text('Sunday Morning Service')),
-                        DropdownMenuItem(value: 'Communion Service', child: Text('Communion Service')),
-                        DropdownMenuItem(value: 'Mid-week Rallies', child: Text('Mid-week Rallies')),
-                        DropdownMenuItem(value: 'Special Event / Concert', child: Text('Special Event / Concert')),
+                        DropdownMenuItem(
+                          value: 'Sunday Service',
+                          child: Text('Sunday Service'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Special Events',
+                          child: Text('Special Events'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Communion Service',
+                          child: Text('Communion Service'),
+                        ),
                       ],
                       onChanged: (val) {
                         if (val != null) setModalState(() => serviceType = val);

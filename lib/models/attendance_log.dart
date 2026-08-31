@@ -23,7 +23,7 @@ class AttendanceLogEntry {
     return AttendanceLogEntry(
       id: id,
       headcount: (data['headcount'] as num?)?.toInt() ?? 0,
-      serviceType: data['serviceType'] as String? ?? 'Sunday Morning Service',
+      serviceType: data['serviceType'] as String? ?? 'Sunday Service',
       serviceDate: data['serviceDate'] as String? ?? defaultDate,
       notes: data['notes'] as String?,
       submittedBy: data['submittedBy'] as String? ?? 'Unknown Usher',

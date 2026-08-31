@@ -63,6 +63,7 @@ class _DatabaseViewState extends State<DatabaseView> {
     }).toList();
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("Usher Team Directory"),
         actions: [

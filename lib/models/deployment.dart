@@ -33,7 +33,7 @@ class Deployment {
       date: data['date'] as String? ?? '',
       usherId: data['usherId'] as String? ?? '',
       usherName: data['usherName'] as String? ?? 'Unknown Usher',
-      serviceType: data['serviceType'] as String? ?? 'Sunday Morning',
+      serviceType: data['serviceType'] as String? ?? 'Sunday Service',
       customEventName: data['customEventName'] as String?,
       station: data['station'] as String? ?? 'Sanctuary',
       role: data['role'] as String? ?? 'Usher',

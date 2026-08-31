@@ -71,9 +71,11 @@ class _CommsViewState extends State<CommsView> {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-    final composerBottomPadding = isKeyboardOpen ? 12.0 : 92.0;
+    final bottomSafeArea = MediaQuery.of(context).padding.bottom;
+    final composerBottomPadding = isKeyboardOpen ? 12.0 : (76.0 + bottomSafeArea + 14.0);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text("Team Comms Feed")),
       body: SafeArea(
         bottom: false,
@@ -99,16 +101,26 @@ class _CommsViewState extends State<CommsView> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-                        itemCount: firebaseService.commsMessages.length,
-                        itemBuilder: (context, index) {
+                    : NotificationListener<ScrollUpdateNotification>(
+                        onNotification: (notification) {
+                          // Dismiss keyboard on downward drag/scroll
+                          if (notification.scrollDelta != null && notification.scrollDelta! < -4) {
+                            if (FocusScope.of(context).hasFocus) {
+                              FocusScope.of(context).unfocus();
+                            }
+                          }
+                          return false;
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                          itemCount: firebaseService.commsMessages.length,
+                          itemBuilder: (context, index) {
                           final msg = firebaseService.commsMessages[index];
                           final isMine =
                               msg.authorUid != null &&
@@ -178,6 +190,7 @@ class _CommsViewState extends State<CommsView> {
                           );
                         },
                       ),
+                    ),
               ),
 
               // Message Composer Input Box
@@ -185,11 +198,17 @@ class _CommsViewState extends State<CommsView> {
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic,
                 padding: EdgeInsets.fromLTRB(16, 8, 16, composerBottomPadding),
-                child: DribbbleGlassContainer(
-                  borderRadius: 24,
-                  padding: const EdgeInsets.all(8),
-                  blur: 20,
-                  child: Row(
+                child: GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    if (details.primaryDelta != null && details.primaryDelta! > 5) {
+                      FocusScope.of(context).unfocus();
+                    }
+                  },
+                  child: DribbbleGlassContainer(
+                    borderRadius: 24,
+                    padding: const EdgeInsets.all(8),
+                    blur: 20,
+                    child: Row(
                     children: [
                       Expanded(
                         child: TextField(
@@ -238,12 +257,13 @@ class _CommsViewState extends State<CommsView> {
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showEditMessageDialog(
     BuildContext context,

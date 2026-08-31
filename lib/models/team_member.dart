@@ -9,6 +9,8 @@ class TeamMember {
   final String? createdAt;
   final String? linkedTo;
   final String? fcmToken;
+  final bool twoFactorEnabled;
+  final String? twoFactorPhone;
 
   TeamMember({
     required this.id,
@@ -21,6 +23,8 @@ class TeamMember {
     this.createdAt,
     this.linkedTo,
     this.fcmToken,
+    this.twoFactorEnabled = false,
+    this.twoFactorPhone,
   });
 
   factory TeamMember.fromMap(Map<String, dynamic> data, String id) {
@@ -96,6 +100,8 @@ class TeamMember {
     }
 
     final bool denied = parseBool(data['denied'] ?? data['Denied'], false);
+    final bool twoFactorEnabled = parseBool(data['twoFactorEnabled'] ?? data['two_factor_enabled'] ?? data['mfaEnabled'], false);
+    final String? twoFactorPhone = parseStr(data['twoFactorPhone'] ?? data['two_factor_phone']);
 
     return TeamMember(
       id: id,
@@ -108,6 +114,8 @@ class TeamMember {
       createdAt: parseStr(data['createdAt'] ?? data['created_at']),
       linkedTo: parseStr(data['linkedTo']),
       fcmToken: parseStr(data['fcmToken']),
+      twoFactorEnabled: twoFactorEnabled,
+      twoFactorPhone: twoFactorPhone,
     );
   }
 
@@ -123,6 +131,8 @@ class TeamMember {
       if (createdAt != null) 'createdAt': createdAt,
       if (linkedTo != null) 'linkedTo': linkedTo,
       if (fcmToken != null) 'fcmToken': fcmToken,
+      'twoFactorEnabled': twoFactorEnabled,
+      if (twoFactorPhone != null) 'twoFactorPhone': twoFactorPhone,
     };
   }
 
