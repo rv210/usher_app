@@ -15,12 +15,22 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   bool _notificationsEnabled = true;
   bool _biometricAvailable = false;
+  String _biometricLabel = "Biometric";
+  IconData _biometricIcon = LucideIcons.fingerprint;
 
   @override
   void initState() {
     super.initState();
-    Provider.of<FirebaseService>(context, listen: false).isBiometricAvailable().then((available) {
-      if (mounted) setState(() => _biometricAvailable = available);
+    final service = Provider.of<FirebaseService>(context, listen: false);
+    service.isBiometricAvailable().then((available) async {
+      if (mounted) {
+        final label = await service.getBiometricTypeLabel();
+        setState(() {
+          _biometricAvailable = available;
+          _biometricLabel = label;
+          _biometricIcon = label == "Face ID" ? LucideIcons.scanFace : LucideIcons.fingerprint;
+        });
+      }
     });
   }
 
@@ -31,22 +41,22 @@ class _SettingsViewState extends State<SettingsView> {
     }
 
     final confirmed = await firebaseService.authenticateBiometrics(
-      reason: "Touch fingerprint sensor to enable biometric unlock",
+      reason: "Authenticate with $_biometricLabel to enable biometric unlock",
     );
     if (confirmed) {
       await firebaseService.setBiometricEnabled(true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("✅ Fingerprint unlock enabled!"),
+          SnackBar(
+            content: Text("✅ $_biometricLabel unlock enabled!"),
             backgroundColor: AppColors.success,
           ),
         );
       }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't verify your identity. Biometric unlock was not enabled."),
+        SnackBar(
+          content: Text("Couldn't verify your identity. $_biometricLabel unlock was not enabled."),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -327,9 +337,9 @@ class _SettingsViewState extends State<SettingsView> {
                     if (_biometricAvailable) ...[
                       Divider(height: 1, color: context.borderThemeColor),
                       SwitchListTile(
-                        title: Text("Fingerprint Unlock", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                        subtitle: Text("Require fingerprint to reopen the app", style: GoogleFonts.inter(fontSize: 12)),
-                        secondary: Icon(LucideIcons.fingerprint, color: Theme.of(context).primaryColor),
+                        title: Text("$_biometricLabel Unlock", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                        subtitle: Text("Require $_biometricLabel to reopen the app", style: GoogleFonts.inter(fontSize: 12)),
+                        secondary: Icon(_biometricIcon, color: Theme.of(context).primaryColor),
                         value: firebaseService.biometricEnabled,
                         activeThumbColor: Theme.of(context).primaryColor,
                         onChanged: (val) => _onBiometricToggled(val, firebaseService),

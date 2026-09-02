@@ -335,7 +335,21 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<String> getBiometricTypeLabel() async {
-    return "Fingerprint";
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        final biometrics = await _localAuth.getAvailableBiometrics();
+        if (biometrics.contains(BiometricType.face)) {
+          return "Face ID";
+        }
+        if (biometrics.contains(BiometricType.fingerprint)) {
+          return "Touch ID";
+        }
+        return "Face ID";
+      }
+      return "Fingerprint";
+    } catch (_) {
+      return (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) ? "Face ID" : "Fingerprint";
+    }
   }
 
   Future<void> setBiometricEnabled(bool value) async {
@@ -392,8 +406,13 @@ class FirebaseService extends ChangeNotifier {
       final canAuth = await isBiometricAvailable();
       if (!canAuth) return false;
 
+      final label = await getBiometricTypeLabel();
+      final defaultReason = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
+          ? "Authenticate with $label to unlock Guardians of the Gate"
+          : "Touch fingerprint sensor to continue";
+
       return await _localAuth.authenticate(
-        localizedReason: reason ?? "Touch fingerprint sensor to continue",
+        localizedReason: reason ?? defaultReason,
         options: const AuthenticationOptions(
           biometricOnly: false,
           stickyAuth: true,

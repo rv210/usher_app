@@ -39,11 +39,22 @@ class _LoginViewState extends State<LoginView> {
   }
 
   FirebaseService? _firebaseService;
+  String _biometricLabel = "Biometric";
+  IconData _biometricIcon = LucideIcons.fingerprint;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _firebaseService = Provider.of<FirebaseService>(context, listen: false);
+
+    _firebaseService!.getBiometricTypeLabel().then((label) {
+      if (mounted) {
+        setState(() {
+          _biometricLabel = label;
+          _biometricIcon = label == "Face ID" ? LucideIcons.scanFace : LucideIcons.fingerprint;
+        });
+      }
+    });
 
     _firebaseService!.getBiometricCredentials().then((creds) {
       if (mounted && creds != null && creds['email'] != null) {
@@ -67,7 +78,7 @@ class _LoginViewState extends State<LoginView> {
     setState(() {
       _unlockAttempting = false;
       if (!success) {
-        _errorMessage = "Fingerprint verification unsuccessful. If you haven't signed in yet, please sign in with your email and password once to link your fingerprint.";
+        _errorMessage = "$_biometricLabel verification unsuccessful. If you haven't signed in yet, please sign in with your email and password once to link $_biometricLabel.";
       } else {
         if (Navigator.canPop(context)) {
           Navigator.of(context).pop();
@@ -252,9 +263,9 @@ class _LoginViewState extends State<LoginView> {
                     ),
                   ],
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(
-                    LucideIcons.fingerprint,
+                    _biometricIcon,
                     color: Colors.white,
                     size: 38,
                   ),
@@ -262,7 +273,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 20),
               Text(
-                "Activate Fingerprint Sign In?",
+                "Activate $_biometricLabel Sign In?",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 22,
@@ -272,7 +283,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Enable fingerprint for fast, secure 1-tap unlock next time you open the app.",
+                "Enable $_biometricLabel for fast, secure 1-tap unlock next time you open the app.",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 14,
@@ -289,15 +300,15 @@ class _LoginViewState extends State<LoginView> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 4,
                 ),
-                icon: const Icon(LucideIcons.fingerprint, size: 20),
+                icon: Icon(_biometricIcon, size: 20),
                 label: Text(
-                  "Activate Fingerprint",
+                  "Activate $_biometricLabel",
                   style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 onPressed: () async {
                   Navigator.pop(ctx);
                   final success = await firebaseService.authenticateBiometrics(
-                    reason: "Touch fingerprint sensor to activate quick sign-in",
+                    reason: "Authenticate with $_biometricLabel to activate quick sign-in",
                   );
                   if (success) {
                     await firebaseService.setBiometricEnabled(true);
@@ -308,8 +319,8 @@ class _LoginViewState extends State<LoginView> {
                     }
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("✅ Fingerprint unlock activated successfully!"),
+                        SnackBar(
+                          content: Text("✅ $_biometricLabel unlock activated successfully!"),
                           backgroundColor: AppColors.success,
                         ),
                       );
@@ -710,10 +721,10 @@ class _LoginViewState extends State<LoginView> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(LucideIcons.fingerprint, size: 20, color: Theme.of(context).primaryColor),
+                      Icon(_biometricIcon, size: 20, color: Theme.of(context).primaryColor),
                       const SizedBox(width: 8),
                       Text(
-                        "Sign In with Fingerprint",
+                        "Sign In with $_biometricLabel",
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
