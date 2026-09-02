@@ -140,6 +140,7 @@ void main() {
     test('CommsMessage fromMap and toMap', () {
       final map = <String, dynamic>{
         'text': 'Service starts in 15 minutes at Station 1.',
+        'imageUrl': 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
         'authorName': 'Robert Vargas',
         'authorUid': 'user_001',
         'createdAt': '2026-08-31T10:00:00.000Z',
@@ -149,12 +150,14 @@ void main() {
 
       expect(msg.id, 'msg_001');
       expect(msg.text, 'Service starts in 15 minutes at Station 1.');
+      expect(msg.imageUrl, 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
       expect(msg.authorName, 'Robert Vargas');
       expect(msg.authorUid, 'user_001');
       expect(msg.edited, isTrue);
 
       final outMap = msg.toMap();
       expect(outMap['text'], 'Service starts in 15 minutes at Station 1.');
+      expect(outMap['imageUrl'], 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
       expect(outMap['edited'], isTrue);
     });
   });

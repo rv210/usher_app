@@ -353,13 +353,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: DribbbleGlassContainer(
                   borderRadius: 30,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                   blur: 20,
                   child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(navItems.length, (index) {
                 final isSelected = _currentTab == index;
                 final item = navItems[index];
+                final isCompact = navItems.length > 6;
                 return GestureDetector(
                   onTap: () => _onNavigateToTab(index),
                   behavior: HitTestBehavior.opaque,
@@ -367,8 +368,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOutCubic,
                     padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? 14 : 10,
-                      vertical: 10,
+                      horizontal: isSelected ? (isCompact ? 10 : 14) : (isCompact ? 6 : 10),
+                      vertical: 8,
                     ),
                     decoration: BoxDecoration(
                       gradient: isSelected ? activeGradient : null,

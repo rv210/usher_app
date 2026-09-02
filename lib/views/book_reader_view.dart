@@ -270,26 +270,28 @@ class _BookReaderViewState extends State<BookReaderView> {
                     children: [
                       Icon(LucideIcons.bookOpen, color: Theme.of(context).primaryColor, size: 22),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Table of Contents",
-                            style: GoogleFonts.cinzel(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: _getTextColor(),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Table of Contents",
+                              style: GoogleFonts.cinzel(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _getTextColor(),
+                              ),
                             ),
-                          ),
-                          Text(
-                            "Guardians Usher Ministry Handbook & SOP",
-                            style: GoogleFonts.lora(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: _getSecondaryTextColor(),
+                            Text(
+                              "Guardians Usher Ministry Handbook & SOP",
+                              style: GoogleFonts.lora(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: _getSecondaryTextColor(),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -449,35 +451,39 @@ class _BookReaderViewState extends State<BookReaderView> {
                   const SizedBox(height: 14),
 
                   // Line Spacing & Font Family
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text("TYPEFACE", style: GoogleFonts.cinzel(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: _getSecondaryTextColor())),
-                      SegmentedButton<bool>(
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.resolveWith((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Theme.of(context).primaryColor;
-                            }
-                            return _getSecondaryTextColor().withValues(alpha: 0.1);
-                          }),
-                          foregroundColor: WidgetStateProperty.resolveWith((states) {
-                            if (states.contains(WidgetState.selected)) {
-                              return Colors.white;
-                            }
-                            return _getTextColor();
-                          }),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<bool>(
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStateProperty.resolveWith((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return Theme.of(context).primaryColor;
+                              }
+                              return _getSecondaryTextColor().withValues(alpha: 0.1);
+                            }),
+                            foregroundColor: WidgetStateProperty.resolveWith((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return Colors.white;
+                              }
+                              return _getTextColor();
+                            }),
+                          ),
+                          segments: const [
+                            ButtonSegment<bool>(value: true, label: Text("Classic Serif", style: TextStyle(fontWeight: FontWeight.bold))),
+                            ButtonSegment<bool>(value: false, label: Text("Modern Sans", style: TextStyle(fontWeight: FontWeight.bold))),
+                          ],
+                          selected: {_useBookSerif},
+                          onSelectionChanged: (val) {
+                            setState(() => _useBookSerif = val.first);
+                            setModalState(() {});
+                            _savePreferences();
+                          },
                         ),
-                        segments: const [
-                          ButtonSegment<bool>(value: true, label: Text("Classic Serif", style: TextStyle(fontWeight: FontWeight.bold))),
-                          ButtonSegment<bool>(value: false, label: Text("Modern Sans", style: TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                        selected: {_useBookSerif},
-                        onSelectionChanged: (val) {
-                          setState(() => _useBookSerif = val.first);
-                          setModalState(() {});
-                          _savePreferences();
-                        },
                       ),
                     ],
                   ),

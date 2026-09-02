@@ -392,6 +392,7 @@ class _DatabaseViewState extends State<DatabaseView> {
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: selectedRole,
                     decoration: const InputDecoration(labelText: "Role"),
                     items: const [
@@ -474,6 +475,7 @@ class _DatabaseViewState extends State<DatabaseView> {
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: selectedRole,
                     decoration: const InputDecoration(labelText: "Role"),
                     items: const [

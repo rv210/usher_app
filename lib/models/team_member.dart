@@ -156,4 +156,12 @@ class TeamMember {
   bool get isLead => (role?.toLowerCase() == 'lead' || isAdmin);
 
   String get displayRole => isAdmin ? 'Admin' : (role ?? 'Usher');
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TeamMember && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

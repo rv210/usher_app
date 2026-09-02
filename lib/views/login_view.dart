@@ -23,25 +23,19 @@ class _LoginViewState extends State<LoginView> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _adminCodeController = TextEditingController();
 
   final _smsCodeController = TextEditingController();
 
   bool _usePhoneLogin = false;
-  bool _showAdminCode = false;
   bool _showPassword = false;
   String? _errorMessage;
 
   bool _unlockAttempting = false;
-  bool _hasTriggeredAutoUnlock = false;
-  bool _showBiometricScreen = true;
-  bool _biometricAvailable = true;
 
   @override
   void initState() {
     super.initState();
     _isRegister = widget.initialMode == 'register';
-    _showBiometricScreen = !_isRegister;
   }
 
   FirebaseService? _firebaseService;
@@ -51,14 +45,13 @@ class _LoginViewState extends State<LoginView> {
     super.didChangeDependencies();
     _firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
-    _firebaseService!.isBiometricAvailable().then((available) {
-      if (mounted) setState(() => _biometricAvailable = available);
+    _firebaseService!.getBiometricCredentials().then((creds) {
+      if (mounted && creds != null && creds['email'] != null) {
+        if (_emailController.text.isEmpty) {
+          _emailController.text = creds['email']!;
+        }
+      }
     });
-
-    if (!_hasTriggeredAutoUnlock && _firebaseService!.isLocked) {
-      _hasTriggeredAutoUnlock = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _attemptBiometricUnlock());
-    }
   }
 
   Future<void> _attemptBiometricUnlock() async {
@@ -68,21 +61,17 @@ class _LoginViewState extends State<LoginView> {
       _errorMessage = null;
     });
 
-    final success = await _firebaseService!.unlockWithBiometrics();
+    final success = await _firebaseService!.loginWithBiometrics();
 
     if (!mounted) return;
     setState(() {
       _unlockAttempting = false;
       if (!success) {
-        _errorMessage = "Couldn't verify your identity. Please try again.";
-      } else if (_firebaseService!.currentUser == null) {
-        _showBiometricScreen = false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Biometrics verified! Sign in with your credentials once to link quick unlock."),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        _errorMessage = "Fingerprint verification unsuccessful. If you haven't signed in yet, please sign in with your email and password once to link your fingerprint.";
+      } else {
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop();
+        }
       }
     });
   }
@@ -94,7 +83,6 @@ class _LoginViewState extends State<LoginView> {
     _passwordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
-    _adminCodeController.dispose();
     _smsCodeController.dispose();
     super.dispose();
   }
@@ -122,32 +110,28 @@ class _LoginViewState extends State<LoginView> {
             // Redirect directly to Email Login
             setState(() {
               _usePhoneLogin = false;
-              _errorMessage = "$cleanErr\nRedirected to Email Sign In.";
+              _errorMessage = "Phone not linked to an account yet. Please sign in with email/password below or register.";
             });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(cleanErr),
-                backgroundColor: AppColors.danger,
-                duration: const Duration(seconds: 4),
-              ),
-            );
           } else {
-            setState(() => _errorMessage = "Couldn't send code: $cleanErr");
+            setState(() => _errorMessage = cleanErr);
           }
         }
         return;
       }
 
-      final code = _smsCodeController.text.trim();
-      if (code.isEmpty) {
+      // Verify SMS code
+      final smsCode = _smsCodeController.text.trim();
+      if (smsCode.isEmpty) {
         if (!mounted) return;
-        setState(() => _errorMessage = "Please enter the 6-digit code sent to your phone.");
+        setState(() => _errorMessage = "Please enter the 6-digit security code received via SMS.");
         return;
       }
 
       try {
-        await firebaseService.verifyPhoneSecurityCode(code);
-        if (mounted) Navigator.of(context).pop();
+        await firebaseService.verifyPhoneSecurityCode(smsCode);
+        if (mounted) {
+          await _checkAndPromptFingerprint(firebaseService);
+        }
       } catch (e) {
         if (!mounted) return;
         setState(() => _errorMessage = e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim());
@@ -159,31 +143,208 @@ class _LoginViewState extends State<LoginView> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      if (!mounted) return;
-      setState(() => _errorMessage = "Please fill in all required fields.");
+      setState(() => _errorMessage = "Please enter both your email address and password.");
       return;
     }
 
-    try {
-      if (_isRegister) {
-        final name = _nameController.text.trim();
-        final phone = _phoneController.text.trim();
-        final adminCode = _adminCodeController.text.trim();
+    if (_isRegister) {
+      final name = _nameController.text.trim();
+      final phone = _phoneController.text.trim();
 
+      if (name.isEmpty) {
+        setState(() => _errorMessage = "Please enter your full name.");
+        return;
+      }
+
+      try {
         await firebaseService.signUp(
           email,
           password,
           name,
           phone,
-          adminCode: adminCode.isNotEmpty ? adminCode : null,
         );
-      } else {
-        await firebaseService.signIn(email, password);
+        await firebaseService.saveBiometricCredentials(email, password);
+        if (mounted) {
+          await _checkAndPromptFingerprint(firebaseService);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _errorMessage = "Registration failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
       }
-      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    // Standard Sign In
+    try {
+      final success = await firebaseService.signIn(email, password);
+      if (!success) {
+        // 2FA SMS challenge required, stay on view for SMS input
+        return;
+      }
+
+      // Save credentials for instant biometric fingerprint unlock
+      await firebaseService.saveBiometricCredentials(email, password);
+
+      if (mounted) {
+        await _checkAndPromptFingerprint(firebaseService);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = "Authentication failed: ${e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim()}");
+    }
+  }
+
+  Future<void> _checkAndPromptFingerprint(FirebaseService firebaseService) async {
+    final available = await firebaseService.isBiometricAvailable();
+    if (!mounted) return;
+
+    if (!available || firebaseService.biometricEnabled) {
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: context.activeGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(ctx).primaryColor.withValues(alpha: 0.4),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.fingerprint,
+                    color: Colors.white,
+                    size: 38,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Activate Fingerprint Sign In?",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: ctx.textPrimaryColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Enable fingerprint for fast, secure 1-tap unlock next time you open the app.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: ctx.textSecondaryColor,
+                ),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).primaryColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 4,
+                ),
+                icon: const Icon(LucideIcons.fingerprint, size: 20),
+                label: Text(
+                  "Activate Fingerprint",
+                  style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final success = await firebaseService.authenticateBiometrics(
+                    reason: "Touch fingerprint sensor to activate quick sign-in",
+                  );
+                  if (success) {
+                    await firebaseService.setBiometricEnabled(true);
+                    final email = _emailController.text.trim();
+                    final password = _passwordController.text.trim();
+                    if (email.isNotEmpty && password.isNotEmpty) {
+                      await firebaseService.saveBiometricCredentials(email, password);
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("✅ Fingerprint unlock activated successfully!"),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    }
+                  }
+                  if (mounted && Navigator.canPop(context)) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  if (mounted && Navigator.canPop(context)) {
+                    Navigator.of(context).pop();
+                  }
+                },
+                child: Text(
+                  "No Thanks, Maybe Later",
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: ctx.textSecondaryColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -196,22 +357,11 @@ class _LoginViewState extends State<LoginView> {
       return _buildTwoFactorScreen(context, firebaseService);
     }
 
-    // Biometric Screen (when locked, or when biometric mode is active on Sign In)
-    if (firebaseService.isLocked || (_showBiometricScreen && !_isRegister && _biometricAvailable)) {
-      return _buildBiometricLoginScreen(context, firebaseService);
-    }
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () {
-            if (_biometricAvailable && !_isRegister) {
-              setState(() => _showBiometricScreen = true);
-            } else {
-              Navigator.of(context).pop();
-            }
-          },
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(_isRegister ? "Create Usher Account" : "Usher Sign In"),
       ),
@@ -221,40 +371,6 @@ class _LoginViewState extends State<LoginView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_biometricAvailable && !_isRegister) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: InkWell(
-                    onTap: () => setState(() => _showBiometricScreen = true),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(LucideIcons.scanFace, size: 18, color: Theme.of(context).primaryColor),
-                          const SizedBox(width: 6),
-                          Icon(LucideIcons.fingerprint, size: 18, color: Theme.of(context).primaryColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Fast Biometric Sign In (Face ID / Fingerprint)",
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
               // Segmented Tab Switcher
               DribbbleGlassContainer(
                 borderRadius: 20,
@@ -331,8 +447,10 @@ class _LoginViewState extends State<LoginView> {
 
               // Sign In Mode Switcher (Email vs Phone)
               if (!_isRegister) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     FilterChip(
                       showCheckmark: false,
@@ -354,7 +472,6 @@ class _LoginViewState extends State<LoginView> {
                         }
                       },
                     ),
-                    const SizedBox(width: 10),
                     FilterChip(
                       showCheckmark: false,
                       avatar: Icon(
@@ -376,6 +493,8 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 const SizedBox(height: 16),
               ],
+
+
 
               if (_errorMessage != null) ...[
                 Container(
@@ -458,27 +577,6 @@ class _LoginViewState extends State<LoginView> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      GestureDetector(
-                        onTap: () => setState(() => _showAdminCode = !_showAdminCode),
-                        child: Row(
-                          children: [
-                            Icon(_showAdminCode ? LucideIcons.chevronDown : LucideIcons.chevronRight, size: 16, color: AppColors.primary),
-                            const SizedBox(width: 6),
-                            Text("Have an Admin or Lead Security Passcode?", style: GoogleFonts.inter(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                      if (_showAdminCode) ...[
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _adminCodeController,
-                          decoration: const InputDecoration(
-                            hintText: "Enter security passcode",
-                            prefixIcon: Icon(LucideIcons.key, size: 18),
-                          ),
-                        ),
-                      ],
                     ] else if (_usePhoneLogin) ...[
                       if (!firebaseService.phoneCodeSent) ...[
                         Text("Registered Phone Number", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -602,6 +700,30 @@ class _LoginViewState extends State<LoginView> {
                 onPressed: _handleSubmit,
                 isLoading: firebaseService.authLoading,
               ),
+
+              if (!_isRegister && firebaseService.biometricEnabled) ...[
+                const SizedBox(height: 12),
+                DribbbleGlassContainer(
+                  borderRadius: 16,
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  onTap: _attemptBiometricUnlock,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(LucideIcons.fingerprint, size: 20, color: Theme.of(context).primaryColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Sign In with Fingerprint",
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: context.textPrimaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -692,440 +814,6 @@ class _LoginViewState extends State<LoginView> {
           },
         );
       },
-    );
-  }
-
-  Widget _buildBiometricLoginScreen(BuildContext context, FirebaseService firebaseService) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).primaryColor;
-    final iconColor = isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF64748B);
-
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // Background ambient soft light orbs
-          Positioned(
-            bottom: -100,
-            left: -80,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: primaryColor.withValues(alpha: isDark ? 0.12 : 0.06),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 200,
-            right: -100,
-            child: Container(
-              width: 280,
-              height: 280,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.secondary.withValues(alpha: isDark ? 0.1 : 0.05),
-              ),
-            ),
-          ),
-
-          Column(
-            children: [
-              // Top Curved Header Banner (Matching Mockup)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  MediaQuery.of(context).padding.top + 28,
-                  24,
-                  38,
-                ),
-                decoration: BoxDecoration(
-                  gradient: context.activeGradient,
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(42),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryColor.withValues(alpha: 0.35),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      "Welcome Back!",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Fast and Secure Login",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Middle Interactive Biometric Area
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 36),
-
-                        // Face ID Interactive Target
-                        InkWell(
-                          onTap: _attemptBiometricUnlock,
-                          borderRadius: BorderRadius.circular(28),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 110,
-                            height: 110,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppColors.cardDark.withValues(alpha: 0.8)
-                                  : Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: _unlockAttempting
-                                    ? primaryColor
-                                    : (isDark ? AppColors.borderDark : AppColors.borderLight),
-                                width: _unlockAttempting ? 2 : 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: _FaceIdGlyph(
-                              size: 64,
-                              color: _unlockAttempting ? primaryColor : iconColor,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // "OR" Divider
-                        Text(
-                          "OR",
-                          style: GoogleFonts.outfit(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: context.textSecondaryColor,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Fingerprint Interactive Target
-                        InkWell(
-                          onTap: _attemptBiometricUnlock,
-                          borderRadius: BorderRadius.circular(28),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 110,
-                            height: 110,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppColors.cardDark.withValues(alpha: 0.8)
-                                  : Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: _unlockAttempting
-                                    ? primaryColor
-                                    : (isDark ? AppColors.borderDark : AppColors.borderLight),
-                                width: _unlockAttempting ? 2 : 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              LucideIcons.fingerprint,
-                              size: 64,
-                              color: _unlockAttempting ? primaryColor : iconColor,
-                            ),
-                          ),
-                        ),
-
-                        if (_unlockAttempting) ...[
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Authenticating...",
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        if (_errorMessage != null) ...[
-                          const SizedBox(height: 18),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: AppColors.danger.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                            ),
-                            child: Text(
-                              _errorMessage!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: AppColors.danger,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(height: 42),
-
-                        // Switch to Username & Password Link
-                        GestureDetector(
-                          onTap: () {
-                            if (firebaseService.isLocked) {
-                              _showLockedPasswordFallbackDialog(context, firebaseService);
-                            } else {
-                              setState(() {
-                                _showBiometricScreen = false;
-                                _errorMessage = null;
-                              });
-                            }
-                          },
-                          child: Text(
-                            "LOGIN WITH USERNAME & PASSWORD",
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.outfit(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8,
-                              decoration: TextDecoration.underline,
-                              color: context.textPrimaryColor,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom Corner Action Icons (Matching Mockup)
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  8,
-                  24,
-                  MediaQuery.of(context).padding.bottom + 14,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Bottom Left Logo/Back Action
-                    InkWell(
-                      onTap: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        } else {
-                          setState(() => _showBiometricScreen = false);
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isDark ? AppColors.surfaceDark : Colors.white,
-                          border: Border.all(
-                            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Icon(
-                            LucideIcons.arrowUpRight,
-                            size: 20,
-                            color: primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Bottom Right Support Contact Action
-                    InkWell(
-                      onTap: () => _showSupportContactDialog(context),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isDark ? AppColors.surfaceDark : Colors.white,
-                          border: Border.all(
-                            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Icon(
-                            LucideIcons.phoneCall,
-                            size: 20,
-                            color: primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLockedPasswordFallbackDialog(BuildContext context, FirebaseService firebaseService) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text("Sign In with Password", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        content: const Text(
-          "To sign in with your email or phone password instead of biometrics, you can sign out and re-enter your credentials.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              firebaseService.signOut();
-            },
-            child: const Text("Sign Out & Enter Password"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSupportContactDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(LucideIcons.phoneCall, color: Theme.of(context).primaryColor, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Text("Ministry Support", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Need assistance with your account or duty deployments?",
-              style: GoogleFonts.inter(fontSize: 13, color: context.textSecondaryColor),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Head Usher / Admin Office", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text("Email: ushers@ministryhub.org", style: GoogleFonts.inter(fontSize: 12, color: context.textSecondaryColor)),
-                  Text("Phone: (555) 123-4567", style: GoogleFonts.inter(fontSize: 12, color: context.textSecondaryColor)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Close"),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1263,7 +951,9 @@ class _LoginViewState extends State<LoginView> {
                         setState(() => _errorMessage = null);
                         try {
                           await firebaseService.verifyTwoFactorSmsCode(code);
-                          if (mounted) Navigator.of(context).pop();
+                          if (mounted) {
+                            await _checkAndPromptFingerprint(firebaseService);
+                          }
                         } catch (e) {
                           if (mounted) {
                             setState(() => _errorMessage = e.toString().replaceAll('Exception: ', '').trim());
@@ -1282,10 +972,11 @@ class _LoginViewState extends State<LoginView> {
                   GestureDetector(
                     onTap: () async {
                       if (firebaseService.pendingTwoFactorPhone != null) {
+                        final messenger = ScaffoldMessenger.of(context);
                         try {
                           await firebaseService.sendTwoFactorSmsCode(firebaseService.pendingTwoFactorPhone!);
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               const SnackBar(content: Text("A new 2FA security code was sent!")),
                             );
                           }
@@ -1324,105 +1015,6 @@ class _LoginViewState extends State<LoginView> {
       ),
     );
   }
-}
-
-class _FaceIdGlyph extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _FaceIdGlyph({
-    this.size = 64,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(size, size),
-      painter: _FaceIdPainter(color: color),
-    );
-  }
-}
-
-class _FaceIdPainter extends CustomPainter {
-  final Color color;
-
-  _FaceIdPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.055
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final fillPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-    final bracketLen = w * 0.22;
-    final radius = w * 0.12;
-
-    // Top-Left bracket
-    final tlPath = Path()
-      ..moveTo(0, bracketLen)
-      ..lineTo(0, radius)
-      ..arcToPoint(Offset(radius, 0), radius: Radius.circular(radius))
-      ..lineTo(bracketLen, 0);
-    canvas.drawPath(tlPath, paint);
-
-    // Top-Right bracket
-    final trPath = Path()
-      ..moveTo(w - bracketLen, 0)
-      ..lineTo(w - radius, 0)
-      ..arcToPoint(Offset(w, radius), radius: Radius.circular(radius))
-      ..lineTo(w, bracketLen);
-    canvas.drawPath(trPath, paint);
-
-    // Bottom-Left bracket
-    final blPath = Path()
-      ..moveTo(0, h - bracketLen)
-      ..lineTo(0, h - radius)
-      ..arcToPoint(Offset(radius, h), radius: Radius.circular(radius))
-      ..lineTo(bracketLen, h);
-    canvas.drawPath(blPath, paint);
-
-    // Bottom-Right bracket
-    final brPath = Path()
-      ..moveTo(w - bracketLen, h)
-      ..lineTo(w - radius, h)
-      ..arcToPoint(Offset(w, h - radius), radius: Radius.circular(radius))
-      ..lineTo(w, h - bracketLen);
-    canvas.drawPath(brPath, paint);
-
-    // Eyes
-    final eyeY = h * 0.42;
-    final eyeRadius = w * 0.045;
-    canvas.drawCircle(Offset(w * 0.36, eyeY), eyeRadius, fillPaint);
-    canvas.drawCircle(Offset(w * 0.64, eyeY), eyeRadius, fillPaint);
-
-    // Nose
-    final nosePath = Path()
-      ..moveTo(w * 0.5, h * 0.45)
-      ..lineTo(w * 0.5, h * 0.54)
-      ..lineTo(w * 0.46, h * 0.54);
-    canvas.drawPath(nosePath, paint);
-
-    // Smile
-    final smileRect = Rect.fromCenter(
-      center: Offset(w * 0.5, h * 0.58),
-      width: w * 0.32,
-      height: h * 0.22,
-    );
-    canvas.drawArc(smileRect, 0.2, 2.74, false, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FaceIdPainter oldDelegate) => oldDelegate.color != color;
 }
 
 

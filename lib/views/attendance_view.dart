@@ -209,63 +209,54 @@ class _AttendanceViewState extends State<AttendanceView> {
               ),
               const SizedBox(height: 10),
 
-              // Service Type Dropdown & Date Picker Row
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _normalizeServiceType(firebaseService.activeServiceType),
-                      decoration: const InputDecoration(
-                        labelText: "Service Type",
-                        prefixIcon: Icon(LucideIcons.church, size: 18),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Sunday Service',
-                          child: Text('Sunday Service'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Special Events',
-                          child: Text('Special Events'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Communion Service',
-                          child: Text('Communion Service'),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) firebaseService.setActiveServiceType(val);
-                      },
-                    ),
+              // Service Type Dropdown & Date Picker
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: _normalizeServiceType(firebaseService.activeServiceType),
+                decoration: const InputDecoration(
+                  labelText: "Service Type",
+                  prefixIcon: Icon(LucideIcons.church, size: 18),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Sunday Service',
+                    child: Text('Sunday Service', overflow: TextOverflow.ellipsis),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: _dateController,
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _dateController.text =
-                                "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                          });
-                        }
-                      },
-                      decoration: const InputDecoration(
-                        labelText: "Service Date",
-                        prefixIcon: Icon(LucideIcons.calendar, size: 18),
-                      ),
-                    ),
+                  DropdownMenuItem(
+                    value: 'Special Events',
+                    child: Text('Special Events', overflow: TextOverflow.ellipsis),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Communion Service',
+                    child: Text('Communion Service', overflow: TextOverflow.ellipsis),
                   ),
                 ],
+                onChanged: (val) {
+                  if (val != null) firebaseService.setActiveServiceType(val);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _dateController,
+                readOnly: true,
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _dateController.text =
+                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                    });
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: "Service Date",
+                  prefixIcon: Icon(LucideIcons.calendar, size: 18),
+                ),
               ),
 
               const SizedBox(height: 12),
@@ -453,6 +444,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _normalizeServiceType(serviceType),
                       decoration: const InputDecoration(
                         labelText: "Service Type",
@@ -461,15 +453,15 @@ class _AttendanceViewState extends State<AttendanceView> {
                       items: const [
                         DropdownMenuItem(
                           value: 'Sunday Service',
-                          child: Text('Sunday Service'),
+                          child: Text('Sunday Service', overflow: TextOverflow.ellipsis),
                         ),
                         DropdownMenuItem(
                           value: 'Special Events',
-                          child: Text('Special Events'),
+                          child: Text('Special Events', overflow: TextOverflow.ellipsis),
                         ),
                         DropdownMenuItem(
                           value: 'Communion Service',
-                          child: Text('Communion Service'),
+                          child: Text('Communion Service', overflow: TextOverflow.ellipsis),
                         ),
                       ],
                       onChanged: (val) {

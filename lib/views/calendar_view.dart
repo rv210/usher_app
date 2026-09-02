@@ -361,13 +361,32 @@ class _CalendarViewState extends State<CalendarView> {
             Expanded(
               child: filteredDeployments.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(LucideIcons.calendarX, size: 48, color: context.textSecondaryColor),
-                          const SizedBox(height: 12),
-                          Text("No deployments found", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(LucideIcons.calendarX, size: 48, color: Theme.of(context).primaryColor),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "No Deployments Assigned",
+                              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              "Assign ushers to stations for this service schedule",
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(fontSize: 13, color: context.textSecondaryColor),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.separated(
@@ -425,23 +444,29 @@ class _CalendarViewState extends State<CalendarView> {
 
                               Row(
                                 children: [
-                                  DribbblePillBadge(
-                                    label: dep.customEventName != null && dep.customEventName!.isNotEmpty
-                                        ? "${dep.serviceType}: ${dep.customEventName}"
-                                        : dep.serviceType,
-                                    icon: dep.serviceType.toLowerCase().contains('communion')
-                                        ? LucideIcons.wine
-                                        : (dep.serviceType.toLowerCase().contains('special')
-                                            ? LucideIcons.sparkles
-                                            : LucideIcons.church),
-                                    color: dep.serviceType.toLowerCase().contains('communion')
-                                        ? AppColors.danger
-                                        : (dep.serviceType.toLowerCase().contains('special')
-                                            ? AppColors.accent
-                                            : Theme.of(context).primaryColor),
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: DribbblePillBadge(
+                                        label: dep.customEventName != null && dep.customEventName!.isNotEmpty
+                                            ? "${dep.serviceType}: ${dep.customEventName}"
+                                            : dep.serviceType,
+                                        icon: dep.serviceType.toLowerCase().contains('communion')
+                                            ? LucideIcons.wine
+                                            : (dep.serviceType.toLowerCase().contains('special')
+                                                ? LucideIcons.sparkles
+                                                : LucideIcons.church),
+                                        color: dep.serviceType.toLowerCase().contains('communion')
+                                            ? AppColors.danger
+                                            : (dep.serviceType.toLowerCase().contains('special')
+                                                ? AppColors.accent
+                                                : Theme.of(context).primaryColor),
+                                      ),
+                                    ),
                                   ),
-                                  const Spacer(),
+                                  const SizedBox(width: 8),
                                   Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(LucideIcons.calendar, size: 14, color: Theme.of(context).primaryColor),
                                       const SizedBox(width: 5),
@@ -459,7 +484,7 @@ class _CalendarViewState extends State<CalendarView> {
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(LucideIcons.trash2, size: 16, color: AppColors.danger),
                                         tooltip: "Remove Duty",
-                                        onPressed: () => firebaseService.deleteDeployment(dep.id),
+                                        onPressed: () => _confirmDeleteDeployment(context, firebaseService, dep),
                                       ),
                                     ],
                                   ),
@@ -622,9 +647,17 @@ class _CalendarViewState extends State<CalendarView> {
   }
 
   void _showSubInDialog(BuildContext context, FirebaseService firebaseService, Deployment dep) {
-    final roster = firebaseService.liveRoster.isNotEmpty
+    final rawRoster = firebaseService.liveRoster.isNotEmpty
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
+
+    final seenIds = <String>{};
+    final roster = <TeamMember>[];
+    for (final m in rawRoster) {
+      if (seenIds.add(m.id)) {
+        roster.add(m);
+      }
+    }
 
     TeamMember? selectedMember = roster.isNotEmpty ? roster.first : null;
     final customNameController = TextEditingController();
@@ -670,6 +703,7 @@ class _CalendarViewState extends State<CalendarView> {
                     Text("Select Replacement (Sub-In):", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<TeamMember?>(
+                      isExpanded: true,
                       initialValue: selectedMember,
                       decoration: const InputDecoration(
                         prefixIcon: Icon(LucideIcons.userCheck, size: 18),
@@ -678,12 +712,12 @@ class _CalendarViewState extends State<CalendarView> {
                         ...roster.map(
                           (m) => DropdownMenuItem<TeamMember?>(
                             value: m,
-                            child: Text("${m.name ?? 'Usher'} (${m.displayRole})"),
+                            child: Text("${m.name ?? 'Usher'} (${m.displayRole})", overflow: TextOverflow.ellipsis),
                           ),
                         ),
                         const DropdownMenuItem<TeamMember?>(
                           value: null,
-                          child: Text("Custom Sub-In Name..."),
+                          child: Text("Custom Sub-In Name...", overflow: TextOverflow.ellipsis),
                         ),
                       ],
                       onChanged: (val) {
@@ -704,11 +738,12 @@ class _CalendarViewState extends State<CalendarView> {
                     Text("Duty Role:", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: selectedRole,
                       decoration: const InputDecoration(
                         prefixIcon: Icon(LucideIcons.shield, size: 18),
                       ),
-                      items: roleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                      items: roleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r, overflow: TextOverflow.ellipsis))).toList(),
                       onChanged: (val) {
                         if (val != null) setModalState(() => selectedRole = val);
                       },
@@ -762,13 +797,22 @@ class _CalendarViewState extends State<CalendarView> {
     return "${sunday.year}-${sunday.month.toString().padLeft(2, '0')}-${sunday.day.toString().padLeft(2, '0')}";
   }
 
-  void _showAddDeploymentDialog(BuildContext context) {
+  void _showAddDeploymentDialog(BuildContext context, [TeamMember? initialMember]) {
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
-    final roster = firebaseService.liveRoster.isNotEmpty
+    final rawRoster = firebaseService.liveRoster.isNotEmpty
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
 
-    TeamMember? selectedMember = roster.isNotEmpty ? roster.first : null;
+    // Deduplicate roster members by ID
+    final seenIds = <String>{};
+    final roster = <TeamMember>[];
+    for (final m in rawRoster) {
+      if (seenIds.add(m.id)) {
+        roster.add(m);
+      }
+    }
+
+    TeamMember? selectedMember = initialMember ?? (roster.isNotEmpty ? roster.first : null);
     final customNameController = TextEditingController();
     final customStationController = TextEditingController();
     final customEventController = TextEditingController();
@@ -792,7 +836,8 @@ class _CalendarViewState extends State<CalendarView> {
     final stations = [
       'Sanctuary (Lead Station)',
       'Vestibule/Door Greeter',
-      'Sanctuary',
+      'Sanctuary Main Floor',
+      'Sanctuary Balcony',
       'Sign/Bathrooms/Petitions',
       'WT Breakdown',
       'Custom...',
@@ -802,16 +847,30 @@ class _CalendarViewState extends State<CalendarView> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (dialogCtx, setModalState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: Text("Assign Duty Station", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(LucideIcons.calendarPlus, size: 20, color: Theme.of(context).primaryColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Text("Assign Duty Station", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Service Type Selector
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: selectedServiceType,
                       decoration: const InputDecoration(
                         labelText: "Service Type",
@@ -824,7 +883,7 @@ class _CalendarViewState extends State<CalendarView> {
                             children: [
                               Icon(LucideIcons.sun, size: 16, color: AppColors.amber),
                               SizedBox(width: 8),
-                              Text('Sunday Service'),
+                              Expanded(child: Text('Sunday Service', overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ),
@@ -834,7 +893,7 @@ class _CalendarViewState extends State<CalendarView> {
                             children: [
                               Icon(LucideIcons.sparkles, size: 16, color: AppColors.accent),
                               SizedBox(width: 8),
-                              Text('Special Events'),
+                              Expanded(child: Text('Special Events', overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ),
@@ -844,7 +903,7 @@ class _CalendarViewState extends State<CalendarView> {
                             children: [
                               Icon(LucideIcons.wine, size: 16, color: AppColors.danger),
                               SizedBox(width: 8),
-                              Text('Communion Service'),
+                              Expanded(child: Text('Communion Service', overflow: TextOverflow.ellipsis)),
                             ],
                           ),
                         ),
@@ -870,34 +929,50 @@ class _CalendarViewState extends State<CalendarView> {
                     ],
                     const SizedBox(height: 12),
 
-                    // Select Usher from User Database
+                    // Select Usher from User Database or Custom
                     if (roster.isNotEmpty) ...[
-                      DropdownButtonFormField<TeamMember>(
+                      DropdownButtonFormField<TeamMember?>(
+                        isExpanded: true,
                         initialValue: selectedMember,
                         decoration: const InputDecoration(
                           labelText: "Select Usher",
                           prefixIcon: Icon(LucideIcons.user, size: 18),
                         ),
-                        items: roster.map((m) {
-                          return DropdownMenuItem<TeamMember>(
-                            value: m,
-                            child: Text(
-                              "${m.name ?? 'Usher'} (${m.displayRole})",
-                            ),
-                          );
-                        }).toList(),
+                        items: [
+                          ...roster.map((m) {
+                            return DropdownMenuItem<TeamMember?>(
+                              value: m,
+                              child: Text(
+                                "${m.name ?? 'Usher'} (${m.displayRole})",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                          const DropdownMenuItem<TeamMember?>(
+                            value: null,
+                            child: Text("✍️ Custom / Unregistered Usher...", overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
                         onChanged: (val) {
-                          if (val != null) {
-                            setModalState(() {
-                              selectedMember = val;
-                              if (val.isLead) {
-                                selectedRole = 'Lead Usher (Sunday Lead)';
-                                selectedStation = 'Sanctuary (Lead Station)';
-                              }
-                            });
-                          }
+                          setModalState(() {
+                            selectedMember = val;
+                            if (val != null && val.isLead) {
+                              selectedRole = 'Lead Usher (Sunday Lead)';
+                              selectedStation = 'Sanctuary (Lead Station)';
+                            }
+                          });
                         },
                       ),
+                      if (selectedMember == null) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: customNameController,
+                          decoration: const InputDecoration(
+                            labelText: "Enter Usher Name",
+                            prefixIcon: Icon(LucideIcons.userPlus, size: 18),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                     ] else ...[
                       TextField(
@@ -912,12 +987,13 @@ class _CalendarViewState extends State<CalendarView> {
 
                     // Manual Role / Lead Designation Selector
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: selectedRole,
                       decoration: const InputDecoration(
                         labelText: "Duty Role / Lead Designation",
                         prefixIcon: Icon(LucideIcons.shieldCheck, size: 18),
                       ),
-                      items: roleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                      items: roleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r, overflow: TextOverflow.ellipsis))).toList(),
                       onChanged: (val) {
                         if (val != null) {
                           setModalState(() {
@@ -933,12 +1009,13 @@ class _CalendarViewState extends State<CalendarView> {
 
                     // Select Station
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: selectedStation,
                       decoration: const InputDecoration(
                         labelText: "Station Location",
                         prefixIcon: Icon(LucideIcons.mapPin, size: 18),
                       ),
-                      items: stations.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      items: stations.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis))).toList(),
                       onChanged: (val) {
                         if (val != null) setModalState(() => selectedStation = val);
                       },
@@ -993,42 +1070,43 @@ class _CalendarViewState extends State<CalendarView> {
                       child: Text("Quick Pick Sunday:", style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
                     ),
                     const SizedBox(height: 4),
-                    SizedBox(
-                      height: 32,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 4,
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
-                        itemBuilder: (context, index) {
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: List.generate(4, (index) {
                           final now = DateTime.now();
                           final daysUntilNextSunday = (DateTime.sunday - now.weekday + 7) % 7;
                           final nextSunday = now.add(Duration(days: daysUntilNextSunday + (index * 7)));
                           final formatted = DateFormat('yyyy-MM-dd').format(nextSunday);
                           final label = DateFormat('MMM d').format(nextSunday);
 
-                          return InkWell(
-                            onTap: () {
-                              setModalState(() {
-                                dateController.text = formatted;
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: dateController.text == formatted ? AppColors.accent : AppColors.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                "Sun $label",
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: dateController.text == formatted ? Colors.white : AppColors.primary,
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setModalState(() {
+                                  dateController.text = formatted;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: dateController.text == formatted ? AppColors.accent : AppColors.primary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "Sun $label",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: dateController.text == formatted ? Colors.white : AppColors.primary,
+                                  ),
                                 ),
                               ),
                             ),
                           );
-                        },
+                        }),
                       ),
                     ),
                   ],
@@ -1036,10 +1114,17 @@ class _CalendarViewState extends State<CalendarView> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () => Navigator.pop(dialogCtx),
                   child: const Text("Cancel"),
                 ),
-                ElevatedButton(
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(LucideIcons.check, size: 16),
+                  label: const Text("Assign Duty"),
                   onPressed: () {
                     final usherName = selectedMember != null
                         ? (selectedMember!.name ?? 'Usher')
@@ -1050,28 +1135,101 @@ class _CalendarViewState extends State<CalendarView> {
                         ? customStationController.text.trim()
                         : selectedStation;
 
-                    if (usherName.isNotEmpty && finalStation.isNotEmpty) {
-                      firebaseService.addDeployment(
-                        station: finalStation,
-                        usherName: usherName,
-                        usherId: usherId,
-                        role: selectedRole,
-                        date: dateController.text.trim(),
-                        serviceType: selectedServiceType,
-                        customEventName: selectedServiceType == 'Special Events' && customEventController.text.trim().isNotEmpty
-                            ? customEventController.text.trim()
-                            : null,
+                    final dutyDate = dateController.text.trim();
+
+                    if (usherName.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please select or enter an usher name."),
+                          backgroundColor: AppColors.danger,
+                        ),
                       );
-                      Navigator.pop(ctx);
+                      return;
                     }
+
+                    if (finalStation.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please select or enter a station location."),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (dutyDate.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please provide a valid duty date."),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                      return;
+                    }
+
+                    firebaseService.addDeployment(
+                      station: finalStation,
+                      usherName: usherName,
+                      usherId: usherId,
+                      role: selectedRole,
+                      date: dutyDate,
+                      serviceType: selectedServiceType,
+                      customEventName: selectedServiceType == 'Special Events' && customEventController.text.trim().isNotEmpty
+                          ? customEventController.text.trim()
+                          : null,
+                    );
+
+                    setState(() {
+                      _selectedSunday = null;
+                      _focusedMonth = DateTime.tryParse(dutyDate) ?? DateTime.now();
+                    });
+
+                    Navigator.pop(dialogCtx);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("✅ Assigned $usherName to $finalStation ($selectedRole) for $dutyDate!"),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
                   },
-                  child: const Text("Assign Duty"),
                 ),
               ],
             );
           },
         );
       },
+    );
+  }
+
+  void _confirmDeleteDeployment(BuildContext context, FirebaseService firebaseService, Deployment dep) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text("Remove Schedule Duty?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: Text("Are you sure you want to remove ${dep.usherName}'s duty at ${dep.station} on ${dep.date}?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () {
+              firebaseService.deleteDeployment(dep.id);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("🗑️ Removed duty for ${dep.usherName}"),
+                  backgroundColor: AppColors.danger,
+                ),
+              );
+            },
+            child: const Text("Remove", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 

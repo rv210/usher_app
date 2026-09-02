@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to quickly and securely unlock the app.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take live station and sanctuary photos for team communications.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select station and sanctuary photos for team communications.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

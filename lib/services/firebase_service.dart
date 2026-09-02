@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -134,6 +135,21 @@ class FirebaseService extends ChangeNotifier {
               android: AndroidInitializationSettings('@mipmap/ic_launcher'),
             ),
           );
+
+          final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+          if (androidPlugin != null) {
+            await androidPlugin.createNotificationChannel(
+              const AndroidNotificationChannel(
+                'high_importance_channel',
+                'High Importance Notifications',
+                description: 'Used for comms, schedule, and deployment alerts',
+                importance: Importance.max,
+                playSound: true,
+                enableVibration: true,
+              ),
+            );
+            await androidPlugin.requestNotificationsPermission();
+          }
         } catch (_) {}
       }
       final settings = await messaging.requestPermission(
@@ -215,6 +231,37 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
+  Future<void> triggerTestPushNotification({String? title, String? body}) async {
+    final notifTitle = title ?? "🔔 Guardians Duty Alert (Test)";
+    final notifBody = body ?? "Native push notifications are active and working on your device!";
+
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        await _localNotifications.show(
+          DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          notifTitle,
+          notifBody,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              channelDescription: 'Used for comms, schedule, and deployment alerts',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+              enableVibration: true,
+              playSound: true,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Local test notification error: $e");
+    }
+
+    await sendPushNotificationAlert(title: notifTitle, body: notifBody);
+  }
+
   Future<void> sendPushNotificationAlert({required String title, required String body}) async {
     try {
       final notifDoc = {
@@ -279,6 +326,18 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
+  Future<List<BiometricType>> getAvailableBiometrics() async {
+    try {
+      return await _localAuth.getAvailableBiometrics();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<String> getBiometricTypeLabel() async {
+    return "Fingerprint";
+  }
+
   Future<void> setBiometricEnabled(bool value) async {
     _biometricEnabled = value;
     notifyListeners();
@@ -295,19 +354,108 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
-  Future<bool> unlockWithBiometrics() async {
+  Future<void> saveBiometricCredentials(String email, String password) async {
     try {
-      final didAuthenticate = await _localAuth.authenticate(
-        localizedReason: "Unlock Guardians of the Gate",
-        options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
-      );
-      if (didAuthenticate) {
-        _isLocked = false;
-        notifyListeners();
-      }
-      return didAuthenticate;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('biometric_saved_email', email.trim());
+      await prefs.setString('biometric_saved_password', base64Encode(utf8.encode(password)));
     } catch (e) {
-      debugPrint("Biometric unlock error: $e");
+      debugPrint("Error saving biometric credentials: $e");
+    }
+  }
+
+  Future<Map<String, String>?> getBiometricCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final email = prefs.getString('biometric_saved_email');
+      final encPass = prefs.getString('biometric_saved_password');
+      if (email != null && encPass != null && email.isNotEmpty && encPass.isNotEmpty) {
+        final pass = utf8.decode(base64Decode(encPass));
+        return {'email': email, 'password': pass};
+      }
+    } catch (e) {
+      debugPrint("Error retrieving biometric credentials: $e");
+    }
+    return null;
+  }
+
+  Future<void> clearBiometricCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('biometric_saved_email');
+      await prefs.remove('biometric_saved_password');
+    } catch (_) {}
+  }
+
+  Future<bool> authenticateBiometrics({String? reason}) async {
+    try {
+      final canAuth = await isBiometricAvailable();
+      if (!canAuth) return false;
+
+      return await _localAuth.authenticate(
+        localizedReason: reason ?? "Touch fingerprint sensor to continue",
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          useErrorDialogs: true,
+          sensitiveTransaction: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint("Biometric authentication error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> unlockWithBiometrics({String? reason}) async {
+    final didAuth = await authenticateBiometrics(reason: reason);
+    if (didAuth) {
+      _isLocked = false;
+      notifyListeners();
+    }
+    return didAuth;
+  }
+
+  Future<bool> loginWithBiometrics() async {
+    try {
+      final canAuth = await isBiometricAvailable();
+      if (!canAuth) return false;
+
+      final label = await getBiometricTypeLabel();
+      final didAuthenticate = await authenticateBiometrics(
+        reason: "Authenticate with $label to sign in",
+      );
+
+      if (!didAuthenticate) return false;
+
+      _isLocked = false;
+
+      if (_auth.currentUser != null) {
+        _currentUser = _auth.currentUser;
+        if (_currentUser != null) {
+          _loadUserProfile(_currentUser!.uid);
+        }
+        notifyListeners();
+        return true;
+      }
+
+      final creds = await getBiometricCredentials();
+      if (creds != null && creds['email'] != null && creds['password'] != null) {
+        final success = await signIn(creds['email']!, creds['password']!);
+        if (success) {
+          _currentUser = _auth.currentUser;
+          if (_currentUser != null) {
+            _loadUserProfile(_currentUser!.uid);
+          }
+          notifyListeners();
+          return true;
+        }
+      }
+
+      notifyListeners();
+      return false;
+    } catch (e) {
+      debugPrint("Biometric login error: $e");
       return false;
     }
   }
@@ -447,12 +595,13 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
-  Future<void> postCommsMessage(String text) async {
-    if (text.trim().isEmpty) return;
+  Future<void> postCommsMessage(String text, {String? imageUrl}) async {
+    if (text.trim().isEmpty && (imageUrl == null || imageUrl.isEmpty)) return;
 
     final msg = CommsMessage(
       id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
       text: text.trim(),
+      imageUrl: imageUrl,
       authorName: _userProfile?.name ?? 'Usher',
       authorEmail: _userProfile?.email ?? '',
       authorUid: _currentUser?.uid ?? '',
@@ -467,7 +616,7 @@ class FirebaseService extends ChangeNotifier {
       await _db.collection('comms_messages').doc(msg.id).set(msg.toMap());
       sendPushNotificationAlert(
         title: msg.authorName ?? 'Guardians Comms',
-        body: msg.text,
+        body: msg.text.isNotEmpty ? msg.text : "📷 [Photo Shared]",
       );
     } catch (e) {
       debugPrint("Comms message post error: $e");
@@ -509,6 +658,24 @@ class FirebaseService extends ChangeNotifier {
       await _db.collection('comms_messages').doc(messageId).delete();
     } catch (e) {
       debugPrint("Delete comms message error: $e");
+    }
+  }
+
+  Future<void> clearAllCommsMessages() async {
+    _commsMessages.clear();
+    notifyListeners();
+
+    try {
+      final snap1 = await _db.collection('communications').get();
+      for (final doc in snap1.docs) {
+        await doc.reference.delete();
+      }
+      final snap2 = await _db.collection('comms_messages').get();
+      for (final doc in snap2.docs) {
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      debugPrint("Clear all comms messages error: $e");
     }
   }
 
@@ -597,26 +764,54 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<void> deleteDeployment(String id) async {
+    final depToDelete = _deployments.where((d) => d.id == id).firstOrNull;
     _deployments.removeWhere((d) => d.id == id);
     notifyListeners();
+
     try {
-      await _db.collection('deployment_publishes').doc(id).delete();
       await _db.collection('deployments').doc(id).delete();
+      await _db.collection('deployment_publishes').doc(id).delete();
+
+      // Clean up any duplicates or ghost documents in both collections
+      if (depToDelete != null) {
+        final snapPublishes = await _db.collection('deployment_publishes')
+            .where('date', isEqualTo: depToDelete.date)
+            .where('station', isEqualTo: depToDelete.station)
+            .where('usherName', isEqualTo: depToDelete.usherName)
+            .get();
+        for (final doc in snapPublishes.docs) {
+          await doc.reference.delete();
+        }
+
+        final snapDeployments = await _db.collection('deployments')
+            .where('date', isEqualTo: depToDelete.date)
+            .where('station', isEqualTo: depToDelete.station)
+            .where('usherName', isEqualTo: depToDelete.usherName)
+            .get();
+        for (final doc in snapDeployments.docs) {
+          await doc.reference.delete();
+        }
+      }
     } catch (e) {
       debugPrint("Delete deployment error: $e");
     }
   }
 
   Future<void> clearAllDeployments() async {
-    final list = List<Deployment>.from(_deployments);
     _deployments.clear();
     notifyListeners();
-    for (final dep in list) {
-      try {
-        await _db.collection('deployments').doc(dep.id).delete();
-      } catch (e) {
-        debugPrint("Clear deployment error: $e");
+
+    try {
+      final snap1 = await _db.collection('deployments').get();
+      for (final doc in snap1.docs) {
+        await doc.reference.delete();
       }
+      final snap2 = await _db.collection('deployment_publishes').get();
+      for (final doc in snap2.docs) {
+        await doc.reference.delete();
+      }
+    } catch (e) {
+      debugPrint("Clear deployment error: $e");
     }
   }
 
@@ -746,7 +941,15 @@ class FirebaseService extends ChangeNotifier {
         if (!completer.isCompleted) completer.complete();
       },
       verificationFailed: (FirebaseAuthException e) {
-        _twoFactorError = e.message ?? "2FA SMS dispatch failed.";
+        if (e.code == 'missing-app-token' ||
+            e.code == 'app-not-authorized' ||
+            (e.message?.contains('app identifier') ?? false) ||
+            (e.message?.contains('Play Integrity') ?? false)) {
+          _twoFactorError =
+              "Firebase 2FA requires your Android SHA-1 fingerprint in Firebase Console, or this number added under 'Phone numbers for testing'.";
+        } else {
+          _twoFactorError = e.message ?? "2FA SMS dispatch failed.";
+        }
         _authLoading = false;
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
@@ -966,7 +1169,15 @@ class FirebaseService extends ChangeNotifier {
           }
         },
         verificationFailed: (e) {
-          _phoneAuthError = e.message ?? "Phone verification failed.";
+          if (e.code == 'missing-app-token' ||
+              e.code == 'app-not-authorized' ||
+              (e.message?.contains('app identifier') ?? false) ||
+              (e.message?.contains('Play Integrity') ?? false)) {
+            _phoneAuthError =
+                "Firebase Phone Auth requires your Android SHA-1 fingerprint added in Firebase Console, or this phone number registered under 'Phone numbers for testing' in Firebase Console.";
+          } else {
+            _phoneAuthError = e.message ?? "Phone verification failed.";
+          }
           _pendingPhone = null;
           _pendingPhoneMember = null;
           _authLoading = false;
@@ -997,13 +1208,15 @@ class FirebaseService extends ChangeNotifier {
   }
 
   void cancelPhoneVerification() {
-    _pendingPhone = null;
-    _pendingPhoneMember = null;
-    _phoneCodeSent = false;
-    _phoneAuthError = null;
-    _verificationId = null;
-    _webConfirmationResult = null;
-    notifyListeners();
+    if (_phoneCodeSent || _verificationId != null || _authLoading || _pendingPhone != null) {
+      _pendingPhone = null;
+      _pendingPhoneMember = null;
+      _phoneCodeSent = false;
+      _phoneAuthError = null;
+      _verificationId = null;
+      _webConfirmationResult = null;
+      Future.microtask(() => notifyListeners());
+    }
   }
 
   Future<bool> verifyPhoneSecurityCode(String enteredCode) async {
@@ -1519,21 +1732,19 @@ class FirebaseService extends ChangeNotifier {
     }
 
     final Map<String, Deployment> deploymentCache = {};
-    for (var colName in ['deployment_publishes', 'deployments']) {
-      try {
-        _db.collection(colName).snapshots().listen((snap) {
-          for (var change in snap.docChanges) {
-            if (change.type == DocumentChangeType.removed) {
-              deploymentCache.remove(change.doc.id);
-            } else if (change.doc.data() != null) {
-              final dep = Deployment.fromMap(change.doc.data()!, change.doc.id);
-              deploymentCache[dep.id] = dep;
-            }
+    try {
+      _db.collection('deployments').snapshots().listen((snap) {
+        for (var change in snap.docChanges) {
+          if (change.type == DocumentChangeType.removed) {
+            deploymentCache.remove(change.doc.id);
+          } else if (change.doc.data() != null) {
+            final dep = Deployment.fromMap(change.doc.data()!, change.doc.id);
+            deploymentCache[dep.id] = dep;
           }
-          _deployments = deploymentCache.values.toList();
-          notifyListeners();
-        }, onError: (_) {});
-      } catch (_) {}
-    }
+        }
+        _deployments = deploymentCache.values.toList();
+        notifyListeners();
+      }, onError: (_) {});
+    } catch (_) {}
   }
 }

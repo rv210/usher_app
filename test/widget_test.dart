@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:usher_app/theme/app_theme.dart';
+import 'package:usher_app/views/landing_view.dart';
 
 void main() {
   testWidgets('DribbbleGlassContainer renders child and responds to tap', (WidgetTester tester) async {
@@ -61,5 +62,19 @@ void main() {
     );
 
     expect(find.text('ADMIN APPROVED'), findsOneWidget);
+  });
+
+  testWidgets('LandingView renders correctly with provider and actions', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LandingView(
+          onGetStarted: () {},
+          onLogin: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('Guardians of the Gate'), findsOneWidget);
+    expect(find.text('Create Usher Account'), findsOneWidget);
   });
 }
