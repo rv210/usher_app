@@ -46,9 +46,23 @@ class _DatabaseViewState extends State<DatabaseView> {
     final isDark = theme.brightness == Brightness.dark;
     final firebaseService = Provider.of<FirebaseService>(context);
 
-    final allMembers = firebaseService.liveRoster.isNotEmpty
+    final rawMembers = firebaseService.liveRoster.isNotEmpty
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
+
+    // Deduplicate by uid — prevents the same person showing twice when they
+    // exist in both liveRoster and approvedUsers.
+    final seen = <String>{};
+    final allMembers = rawMembers.where((u) {
+      // Deduplicate by email first (most reliable unique key), then name, then doc id.
+      // This handles the case where the same person has two Firestore documents.
+      final key = (u.email?.trim().toLowerCase().isNotEmpty == true)
+          ? u.email!.trim().toLowerCase()
+          : (u.name?.trim().toLowerCase().isNotEmpty == true
+              ? u.name!.trim().toLowerCase()
+              : u.id);
+      return seen.add(key);
+    }).toList();
 
     final roster = allMembers.where((u) {
       final matchesSearch = (u.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -199,6 +213,8 @@ class _DatabaseViewState extends State<DatabaseView> {
                       ),
                     )
                   : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).size.width >= 800 ? 30 : 85),
                       itemCount: roster.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 14),

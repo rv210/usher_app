@@ -615,13 +615,9 @@ class _CommsViewState extends State<CommsView> {
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(LucideIcons.arrowLeft, color: Colors.white, size: 22),
-                    onPressed: () => Navigator.maybePop(context),
-                  ),
                   Stack(
                     children: [
                       Container(

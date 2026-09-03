@@ -9,7 +9,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/firebase_options.dart';
 import 'services/firebase_service.dart';
 import 'theme/app_theme.dart';
-import 'views/landing_view.dart';
 import 'views/login_view.dart';
 import 'views/pending_denied_view.dart';
 import 'views/dashboard_view.dart';
@@ -19,6 +18,7 @@ import 'views/database_view.dart';
 import 'views/comms_view.dart';
 import 'views/admin_approval_view.dart';
 import 'views/settings_view.dart';
+import 'views/splash_view.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 @pragma('vm:entry-point')
@@ -91,30 +91,20 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+class _MainShellState extends State<MainShell> {
   int _currentTab = 0; // Default to Dashboard
   double _edgeDragDistance = 0;
   bool _edgeDragTriggered = false;
 
+  // Splash is always shown for at least 3 seconds on every cold launch
+  bool _splashDone = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Lock on the way to the background, not on return — otherwise the
-    // already-unlocked content flashes before the lock screen appears.
-    if (state == AppLifecycleState.paused) {
-      Provider.of<FirebaseService>(context, listen: false).lockIfNeeded();
-    }
+    Future.delayed(const Duration(milliseconds: 3000), () {
+      if (mounted) setState(() => _splashDone = true);
+    });
   }
 
   void _onNavigateToTab(int index) {
@@ -161,33 +151,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final firebaseService = Provider.of<FirebaseService>(context);
 
-    if (firebaseService.authLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+    if (!_splashDone || firebaseService.authLoading) {
+      return const DribbbleSplashScreen();
     }
 
-    // Unauthenticated -> Landing or Login
+    // Unauthenticated -> Direct to Login Screen
     if (firebaseService.currentUser == null) {
-      return LandingView(
-        onGetStarted: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LoginView(initialMode: 'register')),
-          );
-        },
-        onLogin: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LoginView(initialMode: 'login')),
-          );
-        },
-      );
-    }
-
-    // Biometric App Lock — LoginView shows a "Welcome Back" unlock screen
-    // instead of the normal credential form when a session is locked.
-    if (firebaseService.isLocked) {
       return const LoginView(initialMode: 'login');
     }
 
@@ -334,88 +303,257 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
 
     final activeGradient = context.activeGradient;
-
+    final activeColor = Theme.of(context).primaryColor;
     final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return _withEdgeSwipeBack(Scaffold(
-      extendBody: true,
-      resizeToAvoidBottomInset: true,
-      body: DribbbleAmbientBackground(
-        child: IndexedStack(
-          index: _currentTab,
-          children: pages,
+    final isAdmin = profile?.isAdmin == true;
+
+    final List<Map<String, dynamic>> leftNavItems;
+    final List<Map<String, dynamic>> rightNavItems;
+
+    if (isAdmin) {
+      leftNavItems = [
+        {'icon': LucideIcons.calendar, 'label': 'Roster', 'index': 1},
+        {'icon': LucideIcons.binary, 'label': 'Tally', 'index': 2},
+        {'icon': LucideIcons.users, 'label': 'Directory', 'index': 3},
+      ];
+      rightNavItems = [
+        {'icon': LucideIcons.messageSquare, 'label': 'Comms', 'index': 4},
+        {'icon': LucideIcons.sliders, 'label': 'Settings', 'index': 5},
+        {'icon': LucideIcons.shieldCheck, 'label': 'Admin', 'index': 6},
+      ];
+    } else {
+      leftNavItems = [
+        {'icon': LucideIcons.calendar, 'label': 'Roster', 'index': 1},
+        {'icon': LucideIcons.binary, 'label': 'Tally', 'index': 2},
+      ];
+      rightNavItems = [
+        {'icon': LucideIcons.users, 'label': 'Directory', 'index': 3},
+        {'icon': LucideIcons.messageSquare, 'label': 'Comms', 'index': 4},
+        {'icon': LucideIcons.sliders, 'label': 'Settings', 'index': 5},
+      ];
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragUpdate: (details) {
+        // If swiping downward anywhere on screen, dismiss on-screen keyboard to reveal bottom nav bar
+        if (details.delta.dy > 5) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+      },
+      child: _withEdgeSwipeBack(Scaffold(
+        extendBody: true,
+        resizeToAvoidBottomInset: true,
+        body: DribbbleAmbientBackground(
+          child: IndexedStack(
+            index: _currentTab,
+            children: pages,
+          ),
         ),
-      ),
-      bottomNavigationBar: isKeyboardVisible
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: DribbbleGlassContainer(
-                  borderRadius: 30,
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  blur: 20,
-                  child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(navItems.length, (index) {
-                final isSelected = _currentTab == index;
-                final item = navItems[index];
-                final isCompact = navItems.length > 6;
-                return GestureDetector(
-                  onTap: () => _onNavigateToTab(index),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? (isCompact ? 10 : 14) : (isCompact ? 6 : 10),
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: isSelected ? activeGradient : null,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Theme.of(context).primaryColor.withValues(alpha: 0.45),
-                                blurRadius: 14,
-                                spreadRadius: -2,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+        bottomNavigationBar: isKeyboardVisible
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                  child: SizedBox(
+                    height: 82,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.bottomCenter,
                       children: [
-                        Icon(
-                          item['icon'] as IconData,
-                          size: 20,
-                          color: isSelected
-                              ? Colors.white
-                              : context.textSecondaryColor,
-                        ),
-                        if (isSelected) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            item['label'] as String,
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                        // Main Bar Container
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 64,
+                          child: DribbbleGlassContainer(
+                            borderRadius: 28,
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                            blur: 24,
+                            backgroundColor: isDark
+                                ? const Color(0xFF14100E).withValues(alpha: 0.92)
+                                : Colors.white.withValues(alpha: 0.94),
+                            child: Row(
+                              children: [
+                                // Left Nav Items
+                                Expanded(
+                                  child: Row(
+                                    children: leftNavItems.map((item) {
+                                      final isSelected = _currentTab == item['index'];
+                                      return _buildNavItem(
+                                        item: item,
+                                        isSelected: isSelected,
+                                        activeColor: activeColor,
+                                        inactiveColor: context.textSecondaryColor,
+                                        isDark: isDark,
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+
+                                // Gap for Central Elevated Hub Button
+                                const SizedBox(width: 66),
+
+                                // Right Nav Items
+                                Expanded(
+                                  child: Row(
+                                    children: rightNavItems.map((item) {
+                                      final isSelected = _currentTab == item['index'];
+                                      return _buildNavItem(
+                                        item: item,
+                                        isSelected: isSelected,
+                                        activeColor: activeColor,
+                                        inactiveColor: context.textSecondaryColor,
+                                        isDark: isDark,
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
+
+                        // Elevated Central Floating Hub Button
+                        Positioned(
+                          bottom: 14,
+                          child: _buildCenterHubButton(
+                            context: context,
+                            activeGradient: activeGradient,
+                            activeColor: activeColor,
+                            isDark: isDark,
+                            isSelected: _currentTab == 0,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                );
-              }),
+                ),
+              ),
+      )),
+    );
+  }
+
+  Widget _buildNavItem({
+    required Map<String, dynamic> item,
+    required bool isSelected,
+    required Color activeColor,
+    required Color inactiveColor,
+    required bool isDark,
+  }) {
+    final icon = item['icon'] as IconData;
+    final label = item['label'] as String;
+    final index = item['index'] as int;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onNavigateToTab(index),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? activeColor.withValues(alpha: isDark ? 0.22 : 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected ? activeColor : inactiveColor,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? activeColor : inactiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterHubButton({
+    required BuildContext context,
+    required LinearGradient activeGradient,
+    required Color activeColor,
+    required bool isDark,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () => _onNavigateToTab(0),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedScale(
+        scale: isSelected ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // Outer collar matching bar surface
+            color: isDark ? const Color(0xFF14100E) : Colors.white,
+            boxShadow: [
+              // Vibrant ambient theme glow
+              BoxShadow(
+                color: activeColor.withValues(alpha: isSelected ? 0.65 : 0.38),
+                blurRadius: isSelected ? 22 : 14,
+                spreadRadius: isSelected ? 3 : 0,
+                offset: const Offset(0, 5),
+              ),
+              // Subtle outer collar edge contrast
+              BoxShadow(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: isDark ? 0.14 : 0.08),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(4.0),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: activeGradient,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.95),
+                width: 3.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: activeColor.withValues(alpha: 0.45),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                LucideIcons.layoutDashboard,
+                color: Colors.white,
+                size: 26,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 

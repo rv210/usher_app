@@ -78,6 +78,7 @@ enum AppStyleTheme {
   terracotta,
   emerald,
   midnight,
+  paleGoldOlive,
 }
 
 class AppThemeConfig {
@@ -174,6 +175,23 @@ class AppThemePresets {
       bgLight: Color(0xFFEFF6FF),
       bgDark: Color(0xFF0F172A),
       gradient: LinearGradient(colors: [Color(0xFF1E40AF), Color(0xFF6366F1)]),
+    ),
+    AppStyleTheme.paleGoldOlive: AppThemeConfig(
+      style: AppStyleTheme.paleGoldOlive,
+      name: "Pale Gold & Olive",
+      badge: "Sanctuary Classic",
+      description: "Warm Pale Gold with Deep Dark Olive & Parchment",
+      icon: LucideIcons.wheat,
+      primary: Color(0xFFB8994A),
+      secondary: Color(0xFF4A5220),
+      accent: Color(0xFFF2DE9B),
+      bgLight: Color(0xFFFAF6E8),
+      bgDark: Color(0xFF202216),
+      gradient: LinearGradient(
+        colors: [Color(0xFF8A6F2E), Color(0xFFB8994A)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
     ),
   };
 }

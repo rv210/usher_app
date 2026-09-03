@@ -59,21 +59,23 @@ async function sendPushToTokens({
   // topics AND stores its token here, so sending to both would double-fire.
   try {
     const tokensSnap = await db.collection("user_tokens").get();
-    const tokens: string[] = [];
+    const tokenSet = new Set<string>();
     tokensSnap.forEach((doc) => {
       const docData = doc.data();
       const token = docData.token || docData.fcmToken;
       if (token && typeof token === "string" && (!excludeUid || doc.id !== excludeUid)) {
-        tokens.push(token);
+        tokenSet.add(token.trim());
       }
     });
+
+    const tokens = Array.from(tokenSet);
 
     if (tokens.length > 0) {
       const chunkSize = 500;
       for (let i = 0; i < tokens.length; i += chunkSize) {
         const chunk = tokens.slice(i, i + chunkSize);
         const res = await messaging.sendEachForMulticast({ tokens: chunk, ...payload });
-        logger.info(`Multicast (${chunk.length} tokens): ${res.successCount} ok, ${res.failureCount} failed`);
+        logger.info(`Multicast (${chunk.length} unique tokens): ${res.successCount} ok, ${res.failureCount} failed`);
       }
     }
   } catch (err) {

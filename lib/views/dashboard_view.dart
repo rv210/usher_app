@@ -22,49 +22,64 @@ class BibleQuote {
 
 const List<BibleQuote> usherBibleQuotes = [
   BibleQuote(
-    reference: "Psalm 84:10",
-    text: "For a day in thy courts is better than a thousand. I had rather be a doorkeeper in the house of my God, than to dwell in the tents of wickedness.",
+    reference: "Psalm 84:10 (NIV)",
+    text: "Better is one day in your courts than a thousand elsewhere; I would rather be a doorkeeper in the house of my God than dwell in the tents of the wicked.",
     category: "Usher Stewardship",
   ),
   BibleQuote(
-    reference: "Colossians 3:23-24",
-    text: "And whatsoever ye do, do it heartily, as to the Lord, and not unto men; Knowing that of the Lord ye shall receive the reward of the inheritance: for ye serve the Lord Christ.",
+    reference: "Colossians 3:23-24 (NIV)",
+    text: "Whatever you do, work at it with all your heart, as working for the Lord, not for human masters, since you know that you will receive an inheritance from the Lord as a reward. It is the Lord Christ you are serving.",
     category: "Service & Diligence",
   ),
   BibleQuote(
-    reference: "Hebrews 13:2",
-    text: "Be not forgetful to entertain strangers: for thereby some have entertained angels unawares.",
+    reference: "Hebrews 13:2 (NIV)",
+    text: "Do not forget to show hospitality to strangers, for by so doing some people have shown hospitality to angels without knowing it.",
     category: "Hospitality & Welcome",
   ),
   BibleQuote(
-    reference: "1 Corinthians 14:40",
-    text: "Let all things be done decently and in order.",
+    reference: "1 Corinthians 14:40 (NIV)",
+    text: "But everything should be done in a fitting and orderly way.",
     category: "Order & Reverence",
   ),
   BibleQuote(
-    reference: "Romans 12:11-13",
-    text: "Not slothful in business; fervent in spirit; serving the Lord; Rejoicing in hope; patient in tribulation; continuing instant in prayer; Distributing to the necessity of saints; given to hospitality.",
+    reference: "Romans 12:11-13 (NIV)",
+    text: "Never be lacking in zeal, but keep your spiritual fervor, serving the Lord. Be joyful in hope, patient in affliction, faithful in prayer. Share with the Lord’s people who are in need. Practice hospitality.",
     category: "Faithful Spirit",
   ),
   BibleQuote(
-    reference: "1 Peter 4:10",
-    text: "As every man hath received the gift, even so minister the same one to another, as good stewards of the manifold grace of God.",
+    reference: "1 Peter 4:10 (NIV)",
+    text: "Each of you should use whatever gift you have received to serve others, as faithful stewards of God’s grace in its various forms.",
     category: "Grace & Stewardship",
   ),
   BibleQuote(
-    reference: "Galatians 6:9",
-    text: "And let us not be weary in well doing: for in due season we shall reap, if we faint not.",
+    reference: "Galatians 6:9 (NIV)",
+    text: "Let us not become weary in doing good, for at the proper time we will reap a harvest if we do not give up.",
     category: "Perseverance",
   ),
   BibleQuote(
-    reference: "Proverbs 3:5-6",
-    text: "Trust in the LORD with all thine heart; and lean not unto thine own understanding. In all thy ways acknowledge him, and he shall direct thy paths.",
+    reference: "Proverbs 3:5-6 (NIV)",
+    text: "Trust in the LORD with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
     category: "Guidance & Faith",
   ),
   BibleQuote(
-    reference: "Joshua 1:9",
-    text: "Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.",
+    reference: "Joshua 1:9 (NIV)",
+    text: "Have I not commanded you? Be strong and courageous. Do not be afraid; do not be discouraged, for the LORD your God will be with you wherever you go.",
     category: "Courage & Strength",
+  ),
+  BibleQuote(
+    reference: "Matthew 25:21 (NIV)",
+    text: "Well done, good and faithful servant! You have been faithful with a few things; I will put you in charge of many things. Come and share your master’s happiness!",
+    category: "Faithful Ministry",
+  ),
+  BibleQuote(
+    reference: "Philippians 2:3-4 (NIV)",
+    text: "Do nothing out of selfish ambition or vain conceit. Rather, in humility value others above yourselves, not looking to your own interests but each of you to the interests of the others.",
+    category: "Humility & Service",
+  ),
+  BibleQuote(
+    reference: "1 Peter 5:2-3 (NIV)",
+    text: "Be shepherds of God’s flock that is under your care, watching over them—not because you must, but because you are willing, as God wants you to be; not pursuing dishonest gain, but eager to serve.",
+    category: "Leadership & Service",
   ),
 ];
 
@@ -81,89 +96,78 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-  int _quoteIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _quoteIndex = DateTime.now().day % usherBibleQuotes.length;
-  }
-
-  void _nextQuote() {
-    setState(() {
-      _quoteIndex = (_quoteIndex + 1) % usherBibleQuotes.length;
-    });
+  int get _todayQuoteIndex {
+    final now = DateTime.now();
+    final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays;
+    return (now.year * 365 + dayOfYear) % usherBibleQuotes.length;
   }
 
   Widget _buildBibleQuoteCard(BuildContext context, bool isDark) {
-    final quote = usherBibleQuotes[_quoteIndex];
-    return GestureDetector(
-      onTap: _nextQuote,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(LucideIcons.bookOpen, size: 16, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                Text(
-                  "SCRIPTURE OF THE DAY",
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
-                    color: Theme.of(context).primaryColor,
-                  ),
+    final quote = usherBibleQuotes[_todayQuoteIndex];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.bookOpen, size: 16, color: Theme.of(context).primaryColor),
+              const SizedBox(width: 8),
+              Text(
+                "SCRIPTURE OF THE DAY",
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                  color: Theme.of(context).primaryColor,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "\"${quote.text}\"",
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                height: 1.5,
-                color: context.textPrimaryColor,
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "\"${quote.text}\"",
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              height: 1.5,
+              color: context.textPrimaryColor,
             ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  quote.reference,
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    color: context.textSecondaryColor.withValues(alpha: 0.8),
-                  ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                quote.reference,
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.bold,
+                  color: context.textSecondaryColor.withValues(alpha: 0.8),
                 ),
-                Text(
-                  quote.category,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: Theme.of(context).primaryColor,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              Text(
+                quote.category,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -199,7 +203,8 @@ class _DashboardViewState extends State<DashboardView> {
             // Trigger UI update
           },
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).size.width >= 800 ? 30 : 85),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,7 +278,46 @@ class _DashboardViewState extends State<DashboardView> {
                   ],
                 ),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 14),
+
+                // Today's Date Chip
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withValues(alpha: isDark ? 0.18 : 0.10),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: Theme.of(context).primaryColor.withValues(alpha: isDark ? 0.35 : 0.22),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.calendarDays,
+                            size: 13,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).primaryColor,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
 
                 // Scripture of the Day Card
                 _buildBibleQuoteCard(context, isDark),

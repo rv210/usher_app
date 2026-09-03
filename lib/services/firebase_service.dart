@@ -119,6 +119,9 @@ class FirebaseService extends ChangeNotifier {
   String? get fcmToken => _fcmToken;
 
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  StreamSubscription<RemoteMessage>? _onMessageSubscription;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
+  final Set<String> _processedNotificationIds = {};
 
   void initPushNotifications() async {
     try {
@@ -128,27 +131,34 @@ class FirebaseService extends ChangeNotifier {
       }
       final messaging = FirebaseMessaging.instance;
 
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      if (!kIsWeb) {
         try {
           await _localNotifications.initialize(
             const InitializationSettings(
               android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+              iOS: DarwinInitializationSettings(
+                requestAlertPermission: false,
+                requestBadgePermission: false,
+                requestSoundPermission: false,
+              ),
             ),
           );
 
-          final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-          if (androidPlugin != null) {
-            await androidPlugin.createNotificationChannel(
-              const AndroidNotificationChannel(
-                'high_importance_channel',
-                'High Importance Notifications',
-                description: 'Used for comms, schedule, and deployment alerts',
-                importance: Importance.max,
-                playSound: true,
-                enableVibration: true,
-              ),
-            );
-            await androidPlugin.requestNotificationsPermission();
+          if (defaultTargetPlatform == TargetPlatform.android) {
+            final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+            if (androidPlugin != null) {
+              await androidPlugin.createNotificationChannel(
+                const AndroidNotificationChannel(
+                  'high_importance_channel',
+                  'High Importance Notifications',
+                  description: 'Used for comms, schedule, and deployment alerts',
+                  importance: Importance.max,
+                  playSound: true,
+                  enableVibration: true,
+                ),
+              );
+              await androidPlugin.requestNotificationsPermission();
+            }
           }
         } catch (_) {}
       }
@@ -201,12 +211,29 @@ class FirebaseService extends ChangeNotifier {
           await _db.collection('user_tokens').doc(_currentUser!.uid).set(tokenData, SetOptions(merge: true));
         }
 
-        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        // Cancel previous listeners to guarantee exactly one active listener
+        await _onMessageSubscription?.cancel();
+        await _onMessageOpenedAppSubscription?.cancel();
+
+        _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          final msgId = message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch}_${message.notification?.title}_${message.notification?.body}';
+          
+          // Deduplicate if already processed
+          if (_processedNotificationIds.contains(msgId)) {
+            debugPrint("Ignoring duplicate push notification: $msgId");
+            return;
+          }
+          _processedNotificationIds.add(msgId);
+          if (_processedNotificationIds.length > 100) {
+            _processedNotificationIds.remove(_processedNotificationIds.first);
+          }
+
           debugPrint("Received Push Notification: ${message.notification?.title}");
           final notification = message.notification;
           if (notification != null && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+            final notificationId = msgId.hashCode & 0x7FFFFFFF;
             _localNotifications.show(
-              notification.hashCode,
+              notificationId,
               notification.title,
               notification.body,
               const NotificationDetails(
@@ -216,14 +243,20 @@ class FirebaseService extends ChangeNotifier {
                   channelDescription: 'Used for comms, schedule, and deployment alerts',
                   importance: Importance.max,
                   priority: Priority.high,
+                  icon: '@mipmap/ic_launcher',
+                  enableVibration: true,
+                  playSound: true,
                 ),
               ),
             );
           }
         });
 
-        FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
           debugPrint("Opened Push Notification App: ${message.notification?.title}");
+          try {
+            _localNotifications.cancelAll();
+          } catch (_) {}
         });
       }
     } catch (e) {
@@ -238,7 +271,7 @@ class FirebaseService extends ChangeNotifier {
     try {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         await _localNotifications.show(
-          DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          notifTitle.hashCode & 0x7FFFFFFF,
           notifTitle,
           notifBody,
           const NotificationDetails(
@@ -297,11 +330,7 @@ class FirebaseService extends ChangeNotifier {
       }
 
       _biometricEnabled = prefs.getBool('biometric_unlock_enabled') ?? false;
-      // A session restored from a previous launch should be gated behind
-      // biometrics; a fresh sign-in later in this same app run should not.
-      if (_biometricEnabled && _auth.currentUser != null) {
-        _isLocked = true;
-      }
+      _isLocked = false;
 
       notifyListeners();
     } catch (e) {

@@ -217,6 +217,8 @@ class _SettingsViewState extends State<SettingsView> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.fromLTRB(20, 10, 20, MediaQuery.of(context).size.width >= 800 ? 30 : 85),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

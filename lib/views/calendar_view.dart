@@ -390,6 +390,8 @@ class _CalendarViewState extends State<CalendarView> {
                       ),
                     )
                   : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                       itemCount: filteredDeployments.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 14),

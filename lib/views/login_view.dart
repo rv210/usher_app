@@ -41,6 +41,7 @@ class _LoginViewState extends State<LoginView> {
   FirebaseService? _firebaseService;
   String _biometricLabel = "Biometric";
   IconData _biometricIcon = LucideIcons.fingerprint;
+  bool _hasSavedBiometricCreds = false;
 
   @override
   void didChangeDependencies() {
@@ -58,6 +59,9 @@ class _LoginViewState extends State<LoginView> {
 
     _firebaseService!.getBiometricCredentials().then((creds) {
       if (mounted && creds != null && creds['email'] != null) {
+        setState(() {
+          _hasSavedBiometricCreds = true;
+        });
         if (_emailController.text.isEmpty) {
           _emailController.text = creds['email']!;
         }
@@ -370,14 +374,14 @@ class _LoginViewState extends State<LoginView> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false,
         title: Text(_isRegister ? "Create Usher Account" : "Usher Sign In"),
+        centerTitle: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -712,7 +716,7 @@ class _LoginViewState extends State<LoginView> {
                 isLoading: firebaseService.authLoading,
               ),
 
-              if (!_isRegister && firebaseService.biometricEnabled) ...[
+              if (!_isRegister && (firebaseService.biometricEnabled || _hasSavedBiometricCreds)) ...[
                 const SizedBox(height: 12),
                 DribbbleGlassContainer(
                   borderRadius: 16,

@@ -20,7 +20,35 @@ import UserNotifications
     UNUserNotificationCenter.current().delegate = self
     application.registerForRemoteNotifications()
 
+    // Clear badge count on fresh launch
+    application.applicationIconBadgeNumber = 0
+    if #available(iOS 16.0, *) {
+      UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
+    }
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    // Automatically clear badge count when user opens/returns to the app
+    application.applicationIconBadgeNumber = 0
+    if #available(iOS 16.0, *) {
+      UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
+    }
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    // Clear badge when user interacts with or clears a notification
+    UIApplication.shared.applicationIconBadgeNumber = 0
+    if #available(iOS 16.0, *) {
+      UNUserNotificationCenter.current().setBadgeCount(0) { _ in }
+    }
+    completionHandler()
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

@@ -83,6 +83,8 @@ class _AttendanceViewState extends State<AttendanceView> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
