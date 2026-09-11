@@ -3,6 +3,7 @@ import 'package:usher_app/models/deployment.dart';
 import 'package:usher_app/models/attendance_log.dart';
 import 'package:usher_app/models/team_member.dart';
 import 'package:usher_app/models/comms_message.dart';
+import 'package:usher_app/models/guest_check_in.dart';
 
 void main() {
   group('Deployment Model Tests', () {
@@ -159,6 +160,71 @@ void main() {
       expect(outMap['text'], 'Service starts in 15 minutes at Station 1.');
       expect(outMap['imageUrl'], 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
       expect(outMap['edited'], isTrue);
+    });
+  });
+
+  group('GuestCheckInEntry Model Tests', () {
+    test('GuestCheckInEntry fromMap and toMap serialization', () {
+      final now = DateTime.now().toIso8601String();
+      final entry = GuestCheckInEntry(
+        id: 'guest_101',
+        guestName: 'The Robinson Family',
+        partySize: 4,
+        checkInTime: '10:15 AM',
+        entrance: 'Main Entrance - Door 3',
+        status: 'Checked In',
+        createdAt: now,
+        notes: 'First time guests, requested nursery info',
+      );
+
+      final map = entry.toMap();
+      expect(map['guestName'], 'The Robinson Family');
+      expect(map['partySize'], 4);
+      expect(map['checkInTime'], '10:15 AM');
+      expect(map['entrance'], 'Main Entrance - Door 3');
+      expect(map['status'], 'Checked In');
+      expect(map['notes'], 'First time guests, requested nursery info');
+      expect(map['createdAt'], now);
+
+      final parsed = GuestCheckInEntry.fromMap(map, 'guest_101');
+      expect(parsed.id, 'guest_101');
+      expect(parsed.guestName, 'The Robinson Family');
+      expect(parsed.partySize, 4);
+      expect(parsed.checkInTime, '10:15 AM');
+      expect(parsed.entrance, 'Main Entrance - Door 3');
+      expect(parsed.status, 'Checked In');
+      expect(parsed.notes, 'First time guests, requested nursery info');
+    });
+
+    test('GuestCheckInEntry handles defaults gracefully', () {
+      final map = <String, dynamic>{};
+      final parsed = GuestCheckInEntry.fromMap(map, 'guest_102');
+      expect(parsed.id, 'guest_102');
+      expect(parsed.guestName, 'Guest Family');
+      expect(parsed.partySize, 1);
+      expect(parsed.entrance, 'Vestibule Station');
+      expect(parsed.status, 'Checked In');
+    });
+
+    test('GuestCheckInEntry serializes and deserializes Vestibule Station explicitly', () {
+      const entry = GuestCheckInEntry(
+        id: 'guest_103',
+        guestName: 'Sarah Jenkins',
+        partySize: 2,
+        checkInTime: '11:00 AM',
+        entrance: 'Vestibule Station',
+        notes: 'Needs hearing assistance device',
+        createdAt: '2026-09-09T10:00:00.000Z',
+      );
+      final map = entry.toMap();
+      expect(map['entrance'], 'Vestibule Station');
+      expect(map['guestName'], 'Sarah Jenkins');
+      expect(map['partySize'], 2);
+
+      final parsed = GuestCheckInEntry.fromMap(map, 'guest_103');
+      expect(parsed.entrance, 'Vestibule Station');
+      expect(parsed.guestName, 'Sarah Jenkins');
+      expect(parsed.notes, 'Needs hearing assistance device');
     });
   });
 }

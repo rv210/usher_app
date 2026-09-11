@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_scripture_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_rounded_card"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Header: Ministry Badge + Category -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="App Icon" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="SCRIPTURE OF THE DAY"
+            android:textColor="@color/widget_gold_primary"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/widget_scripture_category"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_gold"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:text="MINISTRY"
+            android:textColor="@color/widget_gold_primary"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/widget_divider"
+        android:contentDescription="divider" />
+
+    <!-- Center: Scripture Text -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_scripture_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Better is one day in your courts than a thousand elsewhere; I would rather be a doorkeeper in the house of my God..."
+            android:textColor="@color/widget_text_primary"
+            android:textSize="13sp"
+            android:textStyle="italic"
+            android:maxLines="3"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_scripture_ref"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="— Psalm 84:10 (NIV)"
+            android:textColor="@color/widget_gold_primary"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <!-- Footer: Open Handbook -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical|end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Read Handbook &amp; Modules →"
+            android:textColor="@color/widget_gold_primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>

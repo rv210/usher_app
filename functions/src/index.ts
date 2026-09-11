@@ -13,6 +13,56 @@ function getAdmin() {
   };
 }
 
+interface PushContent {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}
+
+// Android gets a data-only message: the client (foreground onMessage AND the
+// background isolate handler) is the sole renderer. If we also set a
+// top-level `notification` block, Android auto-renders it from the system
+// tray whenever the app isn't in a strictly-resumed foreground state, while
+// FlutterFire can *still* route the same message to onMessage in that same
+// ambiguous state (screen locked, app paused-not-stopped, recents view) -
+// producing two banners for one push. Data-only removes the OS's own
+// rendering path entirely, so there is only ever one renderer.
+function buildAndroidDataOnlyMessage({ title, body, data = {} }: PushContent) {
+  return {
+    data: {
+      title,
+      body,
+      ...data,
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+    },
+    android: {
+      priority: "high" as const,
+    },
+  };
+}
+
+// iOS/web keep the original notification+data shape; iOS relies on APNs
+// auto-rendering the alert, which this doesn't touch.
+function buildDefaultMessage({ title, body, data = {} }: PushContent) {
+  return {
+    notification: { title, body },
+    data: {
+      ...data,
+      click_action: "FLUTTER_NOTIFICATION_CLICK",
+    },
+    apns: {
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: "default",
+          badge: 1,
+          "content-available": 1,
+        },
+      },
+    },
+  };
+}
+
 async function sendPushToTokens({
   title,
   body,
@@ -26,51 +76,30 @@ async function sendPushToTokens({
 }) {
   const { db, messaging } = getAdmin();
 
-  const payload = {
-    notification: { title, body },
-    data: {
-      ...data,
-      click_action: "FLUTTER_NOTIFICATION_CLICK",
-    },
-    android: {
-      priority: "high" as const,
-      notification: {
-        channelId: "high_importance_channel",
-        sound: "default",
-        priority: "high" as const,
-        defaultSound: true,
-        defaultVibrateTimings: true,
-      },
-    },
-    apns: {
-      payload: {
-        aps: {
-          alert: { title, body },
-          sound: "default",
-          badge: 1,
-          "content-available": 1,
-        },
-      },
-    },
-  };
-
-  // Multicast to registered user_tokens. This is the only delivery path -
-  // every device that completes push init both subscribes to the FCM
-  // topics AND stores its token here, so sending to both would double-fire.
   try {
     const tokensSnap = await db.collection("user_tokens").get();
-    const tokenSet = new Set<string>();
+    const androidTokens = new Set<string>();
+    const otherTokens = new Set<string>();
     tokensSnap.forEach((doc) => {
       const docData = doc.data();
       const token = docData.token || docData.fcmToken;
-      if (token && typeof token === "string" && (!excludeUid || doc.id !== excludeUid)) {
-        tokenSet.add(token.trim());
+      if (!token || typeof token !== "string") return;
+      if (excludeUid && doc.id === excludeUid) return;
+      const trimmed = token.trim();
+      if (docData.platform === "android") {
+        androidTokens.add(trimmed);
+      } else {
+        otherTokens.add(trimmed);
       }
     });
 
-    const tokens = Array.from(tokenSet);
+    const groups: Array<[Set<string>, Record<string, unknown>]> = [
+      [androidTokens, buildAndroidDataOnlyMessage({ title, body, data })],
+      [otherTokens, buildDefaultMessage({ title, body, data })],
+    ];
 
-    if (tokens.length > 0) {
+    for (const [tokenSet, payload] of groups) {
+      const tokens = Array.from(tokenSet);
       const chunkSize = 500;
       for (let i = 0; i < tokens.length; i += chunkSize) {
         const chunk = tokens.slice(i, i + chunkSize);
@@ -176,16 +205,12 @@ export const onRegistrationApproved = onDocumentUpdated(
 
       if (token) {
         try {
-          await messaging.send({
-            token,
-            notification: {
-              title: "Registration Approved!",
-              body: `Welcome to the Guardians team, ${userName}! You now have full access to the Usher Hub.`,
-            },
-            data: { type: "approval" },
-            apns: { payload: { aps: { sound: "default", badge: 1 } } },
-            android: { notification: { channelId: "high_importance_channel", sound: "default" } },
-          });
+          const title = "Registration Approved!";
+          const body = `Welcome to the Guardians team, ${userName}! You now have full access to the Usher Hub.`;
+          const payload = tokenDoc.data()?.platform === "android"
+            ? buildAndroidDataOnlyMessage({ title, body, data: { type: "approval" } })
+            : buildDefaultMessage({ title, body, data: { type: "approval" } });
+          await messaging.send({ token, ...payload });
           logger.info(`Approval push sent to ${userName}`);
         } catch (err) {
           logger.error("Error sending approval push:", err);

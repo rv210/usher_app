@@ -40,6 +40,24 @@ class AppColors {
   static const Color textSecondaryDark = Color(0xFFA89E94); // Warm Sand Taupe
   static const Color borderDark = Color(0xFF3B312A); // Warm Dark Timber Border
 
+  // Behance Creative Brand Palette
+  static const Color behanceBlue = Color(0xFF0057FF); // Iconic Behance Royal Blue
+  static const Color behanceCobalt = Color(0xFF0038FF); // Creative Deep Cobalt
+  static const Color behanceDark = Color(0xFF090D18); // Portfolio Showcase Dark
+  static const Color behanceSurfaceDark = Color(0xFF111625); // Gallery Obsidian Card
+  static const Color behanceBorderDark = Color(0xFF1E273D); // Clean Hairline Border
+  static const Color behanceCoral = Color(0xFFFF5A36); // Creative Coral Tangerine
+  static const Color behanceCyan = Color(0xFF00C7FF); // Vibrant Cyan Highlight
+  static const Color behanceCanvasLight = Color(0xFFF3F5FA); // Studio Canvas
+  static const Color behanceSurfaceLight = Colors.white;
+
+  // Figma Creative Design Tokens
+  static const Color figmaViolet = Color(0xFFA259FF); // Figma Signature Purple
+  static const Color figmaCyan = Color(0xFF1ABCFE); // Figma Vector Blue
+  static const Color figmaGreen = Color(0xFF0ACF83); // Figma Component Green
+  static const Color figmaCoral = Color(0xFFF24E1E); // Figma Accent Red-Orange
+  static const Color figmaObsidian = Color(0xFF1E1E1E); // Figma Canvas Charcoal
+
   // Warm Sanctuary Linear Gradients
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF8B1E3F), Color(0xFFB43E51)],
@@ -73,12 +91,15 @@ class AppColors {
 }
 
 enum AppStyleTheme {
+  guardiansGold,
   burgundy,
   figmaNeon,
   terracotta,
   emerald,
   midnight,
   paleGoldOlive,
+  behance,
+  behanceFigma,
 }
 
 class AppThemeConfig {
@@ -111,10 +132,27 @@ class AppThemeConfig {
 
 class AppThemePresets {
   static const Map<AppStyleTheme, AppThemeConfig> configs = {
+    AppStyleTheme.guardiansGold: AppThemeConfig(
+      style: AppStyleTheme.guardiansGold,
+      name: "Guardians Gold & White",
+      badge: "Signature Flagship",
+      description: "Crisp White Canvas with Radiant Sanctuary Gold & Subtle Shadow Elevators",
+      icon: LucideIcons.crown,
+      primary: Color(0xFFC79540),
+      secondary: Color(0xFFE5BC6A),
+      accent: Color(0xFFD4AF37),
+      bgLight: Color(0xFFF9FAFC),
+      bgDark: Color(0xFF10131B),
+      gradient: LinearGradient(
+        colors: [Color(0xFFE5BC6A), Color(0xFFC79540)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ),
+    ),
     AppStyleTheme.burgundy: AppThemeConfig(
       style: AppStyleTheme.burgundy,
       name: "Sacred Burgundy",
-      badge: "Dribbble Glass",
+      badge: "Sanctuary Glass",
       description: "Sacred Royal Burgundy with Warm Sanctuary Amber & Glass",
       icon: LucideIcons.wine,
       primary: Color(0xFF8B1E3F),
@@ -140,7 +178,7 @@ class AppThemePresets {
     AppStyleTheme.terracotta: AppThemeConfig(
       style: AppStyleTheme.terracotta,
       name: "Terracotta Sunset",
-      badge: "Dribbble Warmth",
+      badge: "Studio Warmth",
       description: "Crimson Terracotta with Golden Amber & Warm Sand",
       icon: LucideIcons.sun,
       primary: Color(0xFFC2410C),
@@ -193,21 +231,55 @@ class AppThemePresets {
         end: Alignment.bottomRight,
       ),
     ),
+    AppStyleTheme.behance: AppThemeConfig(
+      style: AppStyleTheme.behance,
+      name: "Behance Creative",
+      badge: "Behance Pro",
+      description: "Iconic Behance Royal Blue with Electric Cobalt & Creative Gallery Glass",
+      icon: LucideIcons.palette,
+      primary: Color(0xFF0057FF),
+      secondary: Color(0xFF0038FF),
+      accent: Color(0xFFFF5A36),
+      bgLight: Color(0xFFF3F5FA),
+      bgDark: Color(0xFF090D18),
+      gradient: LinearGradient(
+        colors: [Color(0xFF0057FF), Color(0xFF0091FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    AppStyleTheme.behanceFigma: AppThemeConfig(
+      style: AppStyleTheme.behanceFigma,
+      name: "Behance x Figma",
+      badge: "Studio Pro",
+      description: "Behance Electric Blue fused with Figma Purple, Cyan & Studio Tokens",
+      icon: LucideIcons.layers,
+      primary: Color(0xFF0057FF),
+      secondary: Color(0xFFA259FF),
+      accent: Color(0xFF1ABCFE),
+      bgLight: Color(0xFFF5F5FA),
+      bgDark: Color(0xFF0C0E14),
+      gradient: LinearGradient(
+        colors: [Color(0xFF0057FF), Color(0xFFA259FF), Color(0xFF1ABCFE)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
   };
 }
 
 class AppTheme {
   static ThemeData getTheme(Brightness brightness, AppStyleTheme styleTheme) {
-    final cfg = AppThemePresets.configs[styleTheme] ?? AppThemePresets.configs[AppStyleTheme.burgundy]!;
+    final cfg = AppThemePresets.configs[styleTheme] ?? AppThemePresets.configs[AppStyleTheme.guardiansGold]!;
     final isDark = brightness == Brightness.dark;
 
     final primary = cfg.primary;
     final secondary = cfg.secondary;
     final bg = isDark ? cfg.bgDark : cfg.bgLight;
     final cardBg = isDark ? Color.alphaBlend(Colors.white.withValues(alpha: 0.05), cfg.bgDark) : Colors.white;
-    final border = isDark ? Colors.white.withValues(alpha: 0.12) : primary.withValues(alpha: 0.15);
-    final textPrimary = isDark ? const Color(0xFFFAF6F0) : const Color(0xFF241B18);
-    final textSecondary = isDark ? const Color(0xFFA89E94) : const Color(0xFF6E6259);
+    final border = isDark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFFE2E8F0);
+    final textPrimary = isDark ? const Color(0xFFFAF6F0) : const Color(0xFF1E2432);
+    final textSecondary = isDark ? const Color(0xFFA89E94) : const Color(0xFF6B7280);
 
     return ThemeData(
       useMaterial3: true,
@@ -220,8 +292,8 @@ class AppTheme {
         secondary: secondary,
         surface: cardBg,
         error: AppColors.danger,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
+        onPrimary: const Color(0xFF161208),
+        onSecondary: const Color(0xFF161208),
         onSurface: textPrimary,
         onError: Colors.white,
       ),
@@ -248,22 +320,22 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: border, width: 1),
+          side: BorderSide(color: border, width: 1.2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
+          foregroundColor: const Color(0xFF161208),
           elevation: 4,
-          shadowColor: primary.withValues(alpha: 0.4),
+          shadowColor: primary.withValues(alpha: 0.35),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(26),
           ),
           textStyle: GoogleFonts.outfit(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
@@ -273,11 +345,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: border),
+          borderSide: BorderSide(color: border, width: 1.2),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: border),
+          borderSide: BorderSide(color: border, width: 1.2),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -287,8 +359,8 @@ class AppTheme {
     );
   }
 
-  static ThemeData get lightTheme => getTheme(Brightness.light, AppStyleTheme.burgundy);
-  static ThemeData get darkTheme => getTheme(Brightness.dark, AppStyleTheme.burgundy);
+  static ThemeData get lightTheme => getTheme(Brightness.light, AppStyleTheme.guardiansGold);
+  static ThemeData get darkTheme => getTheme(Brightness.dark, AppStyleTheme.guardiansGold);
 }
 
 // BuildContext Helpers for Dynamic Theme Access
@@ -298,20 +370,23 @@ extension AppThemeContextX on BuildContext {
   Color get secondaryColor => Theme.of(this).colorScheme.secondary;
   Color get cardBgColor => Theme.of(this).cardTheme.color ?? Theme.of(this).colorScheme.surface;
   Color get textPrimaryColor => Theme.of(this).colorScheme.onSurface;
-  Color get textSecondaryColor => Theme.of(this).textTheme.bodyMedium?.color ?? (Theme.of(this).brightness == Brightness.dark ? const Color(0xFFA89E94) : const Color(0xFF6E6259));
-  Color get borderThemeColor => Theme.of(this).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.12) : Theme.of(this).primaryColor.withValues(alpha: 0.15);
+  Color get textSecondaryColor => Theme.of(this).textTheme.bodyMedium?.color ?? (Theme.of(this).brightness == Brightness.dark ? const Color(0xFFA89E94) : const Color(0xFF6B7280));
+  Color get borderThemeColor => Theme.of(this).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.12) : const Color(0xFFE2E8F0);
 
   LinearGradient get activeGradient {
     return LinearGradient(
-      colors: [primaryColor, secondaryColor],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
+      colors: [secondaryColor, primaryColor],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
     );
   }
 }
 
-// Custom Dribbble UI Widgets
-class DribbbleGlassContainer extends StatelessWidget {
+// ==========================================
+// Behance & Figma Creative Architecture Suite
+// ==========================================
+
+class BehanceGlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
@@ -321,15 +396,15 @@ class DribbbleGlassContainer extends StatelessWidget {
   final double blur;
   final VoidCallback? onTap;
 
-  const DribbbleGlassContainer({
+  const BehanceGlassCard({
     super.key,
     required this.child,
     this.padding,
     this.margin,
-    this.borderRadius = 20.0,
+    this.borderRadius = 16.0,
     this.borderColor,
     this.backgroundColor,
-    this.blur = 15.0,
+    this.blur = 0.0,
     this.onTap,
   });
 
@@ -337,45 +412,58 @@ class DribbbleGlassContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final defaultBg = isDark
-        ? Theme.of(context).cardTheme.color ?? const Color(0xFF1F2937).withValues(alpha: 0.6)
-        : Colors.white.withValues(alpha: 0.85);
+        ? (Theme.of(context).cardTheme.color ?? const Color(0xFF111625)).withValues(alpha: 0.82)
+        : Colors.white;
     final defaultBorder = isDark
-        ? Colors.white.withValues(alpha: 0.12)
-        : Theme.of(context).primaryColor.withValues(alpha: 0.15);
+        ? Colors.white.withValues(alpha: 0.10)
+        : const Color(0xFFE2E8F0);
 
-    Widget container = ClipRRect(
+    final boxDecoration = BoxDecoration(
+      color: backgroundColor ?? defaultBg,
       borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding ?? const EdgeInsets.all(16),
-          margin: margin,
-          decoration: BoxDecoration(
-            color: backgroundColor ?? defaultBg,
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: borderColor ?? defaultBorder,
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.3)
-                    : Theme.of(context).primaryColor.withValues(alpha: 0.08),
-                blurRadius: 20,
-                spreadRadius: -4,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: child,
-        ),
+      border: Border.all(
+        color: borderColor ?? defaultBorder,
+        width: 1.0,
       ),
+      boxShadow: [
+        BoxShadow(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.35)
+              : Colors.black.withValues(alpha: 0.03),
+          blurRadius: 10,
+          spreadRadius: 0,
+          offset: const Offset(0, 3),
+        ),
+      ],
     );
+
+    Widget content = Container(
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: boxDecoration,
+      child: child,
+    );
+
+    Widget container;
+    if (blur > 0) {
+      container = ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: content,
+        ),
+      );
+    } else {
+      container = content;
+    }
+
+    if (margin != null) {
+      container = Padding(padding: margin!, child: container);
+    }
 
     if (onTap != null) {
       return GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: container,
       );
     }
@@ -383,7 +471,7 @@ class DribbbleGlassContainer extends StatelessWidget {
   }
 }
 
-class DribbbleGlowButton extends StatelessWidget {
+class BehanceActionButton extends StatelessWidget {
   final String label;
   final IconData? icon;
   final VoidCallback onPressed;
@@ -391,31 +479,35 @@ class DribbbleGlowButton extends StatelessWidget {
   final double height;
   final bool isLoading;
 
-  const DribbbleGlowButton({
+  const BehanceActionButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
     this.gradient,
-    this.height = 54.0,
+    this.height = 52.0,
     this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final effectiveGradient = gradient ?? context.activeGradient;
+    final isGold = effectiveGradient.colors.contains(const Color(0xFFC79540)) ||
+        effectiveGradient.colors.contains(const Color(0xFFE5BC6A));
+    final textColor = isGold ? const Color(0xFF161208) : Colors.white;
+    final radius = height / 2;
 
     return Container(
       height: height,
       decoration: BoxDecoration(
         gradient: effectiveGradient,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: effectiveGradient.colors.first.withValues(alpha: 0.45),
-            blurRadius: 18,
-            spreadRadius: -2,
-            offset: const Offset(0, 6),
+            color: effectiveGradient.colors.last.withValues(alpha: 0.35),
+            blurRadius: 16,
+            spreadRadius: -1,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -423,31 +515,39 @@ class DribbbleGlowButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: isLoading ? null : onPressed,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(radius),
           child: Center(
             child: isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                    child: CircularProgressIndicator(color: textColor, strokeWidth: 2.5),
                   )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (icon != null) ...[
-                        Icon(icon, color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
-                      ],
-                      Text(
-                        label,
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 0.3,
-                        ),
+                : Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (icon != null) ...[
+                            Icon(icon, color: textColor, size: 19),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            label,
+                            maxLines: 1,
+                            style: GoogleFonts.outfit(
+                              fontSize: 15.0,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
           ),
         ),
@@ -456,12 +556,12 @@ class DribbbleGlowButton extends StatelessWidget {
   }
 }
 
-class DribbblePillBadge extends StatelessWidget {
+class BehancePillBadge extends StatelessWidget {
   final String label;
   final IconData? icon;
   final Color color;
 
-  const DribbblePillBadge({
+  const BehancePillBadge({
     super.key,
     required this.label,
     required this.color,
@@ -471,26 +571,27 @@ class DribbblePillBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withValues(alpha: 0.32), width: 0.9),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 5),
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
           ],
           Flexible(
             child: Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+              label.toUpperCase(),
+              style: GoogleFonts.inter(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
                 color: color,
+                letterSpacing: 0.9,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -502,7 +603,7 @@ class DribbblePillBadge extends StatelessWidget {
   }
 }
 
-class DribbbleStatCard extends StatelessWidget {
+class BehanceStatCard extends StatelessWidget {
   final String title;
   final String value;
   final String? trend;
@@ -512,7 +613,7 @@ class DribbbleStatCard extends StatelessWidget {
   final LinearGradient? gradient;
   final VoidCallback? onTap;
 
-  const DribbbleStatCard({
+  const BehanceStatCard({
     super.key,
     required this.title,
     required this.value,
@@ -526,11 +627,9 @@ class DribbbleStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return DribbbleGlassContainer(
+    return BehanceGlassCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -538,41 +637,41 @@ class DribbbleStatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
                   gradient: gradient ?? LinearGradient(
-                    colors: [iconColor.withValues(alpha: 0.25), iconColor.withValues(alpha: 0.08)],
+                    colors: [iconColor.withValues(alpha: 0.22), iconColor.withValues(alpha: 0.06)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: iconColor.withValues(alpha: 0.3), width: 1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: iconColor.withValues(alpha: 0.28), width: 0.9),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
+                child: Icon(icon, color: iconColor, size: 18),
               ),
               if (trend != null)
-                DribbblePillBadge(
+                BehancePillBadge(
                   label: trend!,
                   color: isPositive ? AppColors.success : AppColors.danger,
                   icon: isPositive ? LucideIcons.trendingUp : LucideIcons.trendingDown,
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             value,
             style: GoogleFonts.outfit(
-              fontSize: 26,
+              fontSize: 25,
               fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
+              letterSpacing: -0.4,
               color: context.textPrimaryColor,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             title,
             style: GoogleFonts.inter(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w500,
               color: context.textSecondaryColor,
             ),
@@ -583,14 +682,14 @@ class DribbbleStatCard extends StatelessWidget {
   }
 }
 
-class DribbbleSectionHeader extends StatelessWidget {
+class BehanceSectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final String? actionLabel;
   final VoidCallback? onAction;
   final IconData? icon;
 
-  const DribbbleSectionHeader({
+  const BehanceSectionHeader({
     super.key,
     required this.title,
     this.subtitle,
@@ -612,16 +711,20 @@ class DribbbleSectionHeader extends StatelessWidget {
               Row(
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 20, color: Theme.of(context).primaryColor),
+                    Icon(icon, size: 19, color: Theme.of(context).primaryColor),
                     const SizedBox(width: 8),
                   ],
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                      color: context.textPrimaryColor,
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.outfit(
+                        fontSize: 19,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                        color: context.textPrimaryColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -631,7 +734,7 @@ class DribbbleSectionHeader extends StatelessWidget {
                 Text(
                   subtitle!,
                   style: GoogleFonts.inter(
-                    fontSize: 13,
+                    fontSize: 12.5,
                     color: context.textSecondaryColor,
                   ),
                 ),
@@ -643,20 +746,20 @@ class DribbbleSectionHeader extends StatelessWidget {
           TextButton(
             onPressed: onAction,
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             ),
             child: Row(
               children: [
                 Text(
                   actionLabel!,
                   style: GoogleFonts.outfit(
-                    fontSize: 14,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     color: Theme.of(context).primaryColor,
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(LucideIcons.chevronRight, size: 16, color: Theme.of(context).primaryColor),
+                Icon(LucideIcons.chevronRight, size: 15, color: Theme.of(context).primaryColor),
               ],
             ),
           ),
@@ -665,10 +768,10 @@ class DribbbleSectionHeader extends StatelessWidget {
   }
 }
 
-class DribbbleAmbientBackground extends StatelessWidget {
+class BehanceAmbientBackground extends StatelessWidget {
   final Widget child;
 
-  const DribbbleAmbientBackground({
+  const BehanceAmbientBackground({
     super.key,
     required this.child,
   });
@@ -679,16 +782,98 @@ class DribbbleAmbientBackground extends StatelessWidget {
     final primaryColor = Theme.of(context).primaryColor;
     final secondaryColor = Theme.of(context).colorScheme.secondary;
 
+    if (!isDark) {
+      return Stack(
+        children: [
+          Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+          ),
+          // Top right subtle luminous glow
+          Positioned(
+            top: -120,
+            right: -80,
+            child: Container(
+              width: 360,
+              height: 360,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    primaryColor.withValues(alpha: 0.08),
+                    primaryColor.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Mid-left subtle ambient aura
+          Positioned(
+            top: 200,
+            left: -120,
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    secondaryColor.withValues(alpha: 0.06),
+                    secondaryColor.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Bottom right soft radiant reflection
+          Positioned(
+            bottom: -90,
+            right: -60,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    primaryColor.withValues(alpha: 0.05),
+                    primaryColor.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
+      );
+    }
+
     return Stack(
       children: [
-        // Background color scaffold match
         Container(
           color: Theme.of(context).scaffoldBackgroundColor,
         ),
-        // Ambient glowing top right blob
+        // Top right primary glow
         Positioned(
-          top: -120,
-          right: -100,
+          top: -100,
+          right: -80,
+          child: Container(
+            width: 350,
+            height: 350,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.24),
+                  primaryColor.withValues(alpha: 0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Mid-left secondary aura
+        Positioned(
+          top: 180,
+          left: -120,
           child: Container(
             width: 320,
             height: 320,
@@ -696,36 +881,119 @@ class DribbbleAmbientBackground extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  primaryColor.withValues(alpha: isDark ? 0.22 : 0.15),
-                  primaryColor.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-        ),
-        // Ambient glowing bottom left blob
-        Positioned(
-          bottom: -100,
-          left: -80,
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  secondaryColor.withValues(alpha: isDark ? 0.18 : 0.12),
+                  secondaryColor.withValues(alpha: 0.18),
                   secondaryColor.withValues(alpha: 0.0),
                 ],
               ),
             ),
           ),
         ),
-        // Main Content
+        // Bottom right subtle pulse
+        Positioned(
+          bottom: -80,
+          right: -60,
+          child: Container(
+            width: 290,
+            height: 290,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  primaryColor.withValues(alpha: 0.15),
+                  primaryColor.withValues(alpha: 0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
         child,
       ],
     );
   }
 }
+
+class FigmaBentoCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final double borderRadius;
+  final Color? borderColor;
+  final Color? backgroundColor;
+  final LinearGradient? gradient;
+  final VoidCallback? onTap;
+
+  const FigmaBentoCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.margin,
+    this.borderRadius = 18.0,
+    this.borderColor,
+    this.backgroundColor,
+    this.gradient,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final defaultBg = isDark
+        ? const Color(0xFF101422)
+        : Colors.white;
+    final defaultBorder = isDark
+        ? Colors.white.withValues(alpha: 0.09)
+        : const Color(0xFFE2E8F0);
+
+    Widget content = Container(
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: gradient == null ? (backgroundColor ?? defaultBg) : null,
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: borderColor ?? defaultBorder,
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.30)
+                : Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+
+    if (margin != null) {
+      content = Padding(padding: margin!, child: content);
+    }
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: content,
+        ),
+      );
+    }
+    return content;
+  }
+}
+
+// Backward Compatibility Aliases for Legacy Dribbble Names
+typedef DribbbleGlassContainer = BehanceGlassCard;
+typedef DribbbleGlowButton = BehanceActionButton;
+typedef DribbblePillBadge = BehancePillBadge;
+typedef DribbbleStatCard = BehanceStatCard;
+typedef DribbbleSectionHeader = BehanceSectionHeader;
+typedef DribbbleAmbientBackground = BehanceAmbientBackground;
+
 
 

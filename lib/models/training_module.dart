@@ -2,11 +2,19 @@ class TrainingModule {
   final String title;
   final String summary;
   final String content;
+  final int pairedChapterIndex;
+  final String pairedChapterTitle;
+  final String keyScripture;
+  final String practicalTakeaway;
 
   const TrainingModule({
     required this.title,
     required this.summary,
     required this.content,
+    required this.pairedChapterIndex,
+    required this.pairedChapterTitle,
+    required this.keyScripture,
+    required this.practicalTakeaway,
   });
 }
 
@@ -17,6 +25,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 1: The Divine Calling of Ushering",
     summary: "Scriptural foundations (1 Cor. 12:28) and the Five Words of Ministry",
+    pairedChapterIndex: 0,
+    pairedChapterTitle: "Chapter 1: The Divine Calling of the Church Usher",
+    keyScripture: "1 Corinthians 12:28 & Psalm 84:10",
+    practicalTakeaway: "You are the first sermon guests receive. Set the spiritual atmosphere with reverence, warmth, and excellence.",
     content:
         "• Scriptural Foundation:\n"
         "Ushering is far more than shaking hands and handing out bulletins. According to 1 Corinthians 12:28, God has set 'HELPS' in the Church as a supernatural, divinely ordained ministry on par with teaching and leadership.\n\n"
@@ -32,6 +44,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 2: Lifestyle Ushering — Leadership by Example",
     summary: "Spiritual readiness, appearance, punctuality, and spiritual sensitivity",
+    pairedChapterIndex: 0,
+    pairedChapterTitle: "Chapter 1: The Divine Calling of the Church Usher",
+    keyScripture: "Psalm 84:10 & Colossians 3:23",
+    practicalTakeaway: "Arrive prayed-up, punctual (30 min early), and maintain alert spiritual sensitivity for divine order.",
     content:
         "• Spiritual Readiness & Prayer:\n"
         "Never begin an ushering shift without prayer. Pray over your section, the seats, the visitors who will occupy them, and for the Pastor's message to take root in receptive hearts.\n\n"
@@ -45,6 +61,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 3: Sanctuary Seating & Guest Etiquette",
     summary: "Seating dynamics, crowd flow, late arrivals, and accessibility care",
+    pairedChapterIndex: 1,
+    pairedChapterTitle: "Chapter 2: Sanctuary Protocol & Crowd Flow",
+    keyScripture: "1 Corinthians 14:40",
+    practicalTakeaway: "Fill front-to-back, walk guests to seats instead of pointing, and hold doors gracefully during prayer.",
     content:
         "• The Golden Rule of Seating:\n"
         "Fill the sanctuary from front to back, center to side. This concentrates spiritual energy, prevents empty front rows, and makes seating late arrivals much easier.\n\n"
@@ -60,6 +80,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 4: Tithes, Offering & Communion Protocols",
     summary: "Reverence, synchronized basket passing, and two-person financial security",
+    pairedChapterIndex: 2,
+    pairedChapterTitle: "Chapter 3: Tithes, Offerings & Financial Integrity",
+    keyScripture: "Colossians 3:23-24 & Acts 6:3-5",
+    practicalTakeaway: "Step forward in synchronized unison, maintain dual-custody of funds, and distribute communion reverently.",
     content:
         "• Offering Collection Procedures:\n"
         "1. Approach the altar with unity and synchronized posture when the pastor calls for the offering.\n"
@@ -76,6 +100,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 5: Handling Disturbances & Emergency Response",
     summary: "De-escalating interruptions, crying infants, and medical emergencies",
+    pairedChapterIndex: 4,
+    pairedChapterTitle: "Chapter 5: Safety, Distraction Prevention & Medical Protocols",
+    keyScripture: "Ephesians 4:27 & 1 Thessalonians 5:14",
+    practicalTakeaway: "Execute the 3-Usher medical plan instantly: Care/Shielding, 911 Dispatch, and Entrance Paramedic Guide.",
     content:
         "• Dealing with Disruptive Individuals:\n"
         "1. Respond quickly, calmly, and without creating a spectacle.\n"
@@ -91,6 +119,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 6: Legal Guidelines, Safety & Child Protection",
     summary: "Child safety policies, slip & fall prevention, and liability protection",
+    pairedChapterIndex: 4,
+    pairedChapterTitle: "Chapter 5: Safety, Distraction Prevention & Medical Protocols",
+    keyScripture: "1 Thessalonians 5:14 & Romans 12:7",
+    practicalTakeaway: "Enforce the two-adult child protection policy, deploy wet floor signs immediately, and document any incident.",
     content:
         "• Child Safety & Protection Policies:\n"
         "1. Never be alone behind closed doors with a child or minor.\n"
@@ -106,6 +138,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 7: The Head Usher & Strategic Coordination",
     summary: "Station rosters, headcount tallies, and post-service wrap-up",
+    pairedChapterIndex: 3,
+    pairedChapterTitle: "Chapter 4: Holy Communion & Special Services",
+    keyScripture: "Acts 6:3-5",
+    practicalTakeaway: "Lead station assignments by spiritual gifts, conduct headcount tallies 25 min in, and complete post-service sweeps.",
     content:
         "• Station Deployment & Roster Management:\n"
         "Assign ushers based on strengths: vibrant greeters at the front doors, experienced ushers on main floor aisles, and diligent security ushers at the rear and parking lots.\n\n"
@@ -119,6 +155,10 @@ const List<TrainingModule> usheringTrainingModules = [
   TrainingModule(
     title: "Module 8: Usher's Proverbs & Golden Wisdom",
     summary: "Timeless rules of church hospitality and ministerial excellence",
+    pairedChapterIndex: 5,
+    pairedChapterTitle: "Chapter 6: Ministry Proverbs & The Doorkeeper’s Covenant",
+    keyScripture: "Romans 12:7",
+    practicalTakeaway: "Walk with them, smile first, stay flexible, and make the Doorkeeper's Covenant prayer your personal lifestyle.",
     content:
         "• Golden Proverbs of Church Ushering:\n"
         "1. 'An usher who is prepared prevents emergencies before they happen.'\n"
@@ -130,3 +170,8 @@ const List<TrainingModule> usheringTrainingModules = [
         "Lord, thank You for the honor to serve as a doorkeeper in Your house. Grant me eyes to see the hurting, a heart to welcome the stranger, and wisdom to maintain peace and reverence in Your sanctuary. Let Your love shine through my service today. Amen.",
   ),
 ];
+
+/// Helper to find all training modules paired with a specific handbook chapter index.
+List<TrainingModule> getModulesForChapter(int chapterIndex) {
+  return usheringTrainingModules.where((m) => m.pairedChapterIndex == chapterIndex).toList();
+}

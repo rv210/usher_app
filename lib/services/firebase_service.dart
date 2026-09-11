@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,10 +10,17 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'bubble_service.dart';
+import 'app_widget_service.dart';
+import 'package:intl/intl.dart';
 import '../models/team_member.dart';
 import '../models/deployment.dart';
 import '../models/attendance_log.dart';
 import '../models/comms_message.dart';
+import '../models/guest_check_in.dart';
+import '../models/announcement.dart';
 import '../theme/app_theme.dart';
 
 const String adminCodeConstant = 'GUARDIAN-LEAD-2024';
@@ -23,11 +31,16 @@ class FirebaseService extends ChangeNotifier {
 
   User? _currentUser;
   TeamMember? _userProfile;
+  String? _userCustomPhotoPath;
+  String? get userCustomPhotoPath => _userCustomPhotoPath ?? _userProfile?.photoUrl;
+  String? _userCustomCardBgPath;
+  String get userCustomCardBgPath => _userCustomCardBgPath ?? 'assets/images/hub_header_bg.jpg';
   bool _authLoading = false;
   bool _profileLoading = false;
   bool _isOfflineDemoMode = false;
+  bool _isUserSignedIn = false;
   ThemeMode _themeMode = ThemeMode.light;
-  AppStyleTheme _activeStyleTheme = AppStyleTheme.burgundy;
+  AppStyleTheme _activeStyleTheme = AppStyleTheme.guardiansGold;
 
   List<TeamMember> _liveRoster = [];
   List<TeamMember> _pendingUsers = [];
@@ -36,6 +49,8 @@ class FirebaseService extends ChangeNotifier {
   List<AttendanceLogEntry> _attendanceLogs = [];
   List<CommsMessage> _commsMessages = [];
   List<Deployment> _deployments = [];
+  DateTime? _lastReadCommsTimestamp;
+  DateTime? get lastReadCommsTimestamp => _lastReadCommsTimestamp;
 
   Future<void> _writeTeamDoc(String docId, Map<String, dynamic> data) async {
     final List<String> collections = ['team', 'users', 'ushers', 'team_members', 'roster'];
@@ -56,6 +71,7 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<int> purgeGhostMembers() async {
+    int purgedCount = 0;
     final ghosts = _liveRoster.where((u) {
       final isUsherFallbackName = u.name == null || u.name == 'Usher' || u.name!.trim().isEmpty;
       final hasNoEmail = u.email == null || u.email!.trim().isEmpty;
@@ -65,28 +81,163 @@ class FirebaseService extends ChangeNotifier {
 
     for (final ghost in ghosts) {
       await deleteTeamMember(ghost.id);
+      purgedCount++;
     }
-    return ghosts.length;
+
+    // Also identify and remove stale duplicate documents across Firestore collections
+    try {
+      final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
+      final List<TeamMember> allRaw = [];
+      for (var colName in collectionsToList) {
+        final snap = await _db.collection(colName).get();
+        for (var d in snap.docs) {
+          try {
+            allRaw.add(TeamMember.fromMap(d.data(), d.id));
+          } catch (_) {}
+        }
+      }
+
+      final canonicalList = deduplicateMemberList(allRaw, currentUid: _currentUser?.uid);
+      for (final canonical in canonicalList) {
+        final duplicates = allRaw.where((r) => r.id != canonical.id && isSameMember(r, canonical)).toList();
+        for (final dup in duplicates) {
+          await deleteTeamMember(dup.id);
+          purgedCount++;
+        }
+      }
+    } catch (_) {}
+
+    await refreshRoster();
+    return purgedCount;
   }
 
-  String _bulletinText = "Welcome to Guardians of the Gate usher portal.";
+  String _bulletinText = "Usher Team Meeting: Monthly alignment & protocol review this Sunday at 8:30 AM in Room 204.";
   String _dashboardLeadName = "Lead Usher";
+
+  // Announcements live state & persistence
+  final Set<String> _deletedAnnouncementIds = {};
+  List<Announcement> _announcements = [
+    const Announcement(
+      id: 'ann_meeting_1',
+      title: 'Usher Team Meeting & Briefing',
+      description: 'Monthly team alignment, protocol review, and communion distribution coordination this Sunday at 8:30 AM in Room 204.',
+      date: 'Sep 13, 2026',
+      category: 'Usher Meeting',
+    ),
+    const Announcement(
+      id: 'ann_worship_1',
+      title: 'All-Church Night of Worship',
+      description: 'Join us for an evening of extended acoustic worship, prayer, and communion this Friday at 7:00 PM in the Main Sanctuary.',
+      date: 'Sep 18, 2026',
+      category: 'Worship Night',
+    ),
+    const Announcement(
+      id: 'ann_bible_1',
+      title: 'Midweek Bible Study: Book of Acts',
+      description: 'Deep dive into the early church and the ministry of Helps every Wednesday at 7:00 PM. Light dinner and fellowship at 6:15 PM.',
+      date: 'Sep 16, 2026',
+      category: 'Bible Study',
+    ),
+    const Announcement(
+      id: 'ann_outreach_1',
+      title: 'Community Food Drive & Outreach',
+      description: 'Serving our neighborhood with fresh groceries and prayer this Saturday at 9:00 AM. Volunteers meet in the South Parking Lot.',
+      date: 'Sep 19, 2026',
+      category: 'Community Outreach',
+    ),
+    const Announcement(
+      id: 'ann_member_1',
+      title: 'New Member & Usher Orientation',
+      description: 'Interested in learning more about our church or joining the ushering ministry? Next class starts this Sunday after 2nd service.',
+      date: 'Sep 20, 2026',
+      category: 'New Member Class',
+    ),
+    const Announcement(
+      id: 'ann_volunteer_1',
+      title: 'Volunteer Appreciation Sunday',
+      description: 'Thank you to all our amazing ushers and volunteers! Fellowship brunch and recognition ceremony following morning service.',
+      date: 'Sep 27, 2026',
+      category: 'Volunteer Appreciation',
+    ),
+  ];
+
+  List<Announcement> get announcements =>
+      _announcements.where((a) => !_deletedAnnouncementIds.contains(a.id)).toList();
+  Announcement? get latestAnnouncement {
+    final active = announcements;
+    return active.isNotEmpty ? active.first : null;
+  }
+
+  Future<void> addAnnouncement(Announcement ann) async {
+    _deletedAnnouncementIds.remove(ann.id);
+    _announcements.removeWhere((a) => a.id == ann.id);
+    _announcements.insert(0, ann);
+    _bulletinText = "${ann.title}: ${ann.description}";
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('deleted_announcement_ids', _deletedAnnouncementIds.toList());
+      await prefs.setString('cached_announcements_json', jsonEncode(_announcements.map((a) => a.toMap()).toList()));
+    } catch (e) {
+      debugPrint("Error persisting added announcement: $e");
+    }
+    try {
+      await _db.collection('announcements').doc(ann.id).set(ann.toMap());
+      await _db.collection('settings').doc('bulletin').set({'text': _bulletinText});
+    } catch (e) {
+      debugPrint("Add announcement error: $e");
+    }
+  }
+
+  Future<void> deleteAnnouncement(String id) async {
+    _deletedAnnouncementIds.add(id);
+    _announcements.removeWhere((a) => a.id == id);
+    final active = announcements;
+    if (active.isNotEmpty) {
+      _bulletinText = "${active.first.title}: ${active.first.description}";
+    } else {
+      _bulletinText = "No active announcements.";
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('deleted_announcement_ids', _deletedAnnouncementIds.toList());
+      await prefs.setString('cached_announcements_json', jsonEncode(_announcements.map((a) => a.toMap()).toList()));
+    } catch (e) {
+      debugPrint("Error persisting deleted announcement: $e");
+    }
+    try {
+      await _db.collection('announcements').doc(id).delete();
+    } catch (e) {
+      debugPrint("Delete announcement error: $e");
+    }
+  }
 
   // Tally Counter live state
   int _currentTallyCount = 0;
   String _activeServiceType = 'Sunday Service';
+  int _lastLocalTallyUpdateTime = 0;
+
+  // Guest check-in live state
+  List<GuestCheckInEntry> _guestCheckIns = [];
+  final Set<String> _deletedGuestIds = {};
+  List<GuestCheckInEntry> get guestCheckIns => _guestCheckIns;
+  int get todayGuestCount => _guestCheckIns.fold(0, (sum, g) => sum + g.partySize);
 
   // Getters
-  User? get currentUser => _currentUser;
+  User? get currentUser => _currentUser ?? _auth.currentUser;
+  bool get isUserSignedIn => _isUserSignedIn || _currentUser != null || _auth.currentUser != null;
+
   TeamMember? get userProfile {
     if (_userProfile != null) return _userProfile;
-    if (_currentUser != null) {
-      final email = _currentUser!.email ?? '';
-      final name = (_currentUser!.displayName != null && _currentUser!.displayName!.trim().isNotEmpty)
-          ? _currentUser!.displayName!.trim()
+    final activeUser = _currentUser ?? _auth.currentUser;
+    if (activeUser != null) {
+      final email = activeUser.email ?? '';
+      final name = (activeUser.displayName != null && activeUser.displayName!.trim().isNotEmpty)
+          ? activeUser.displayName!.trim()
           : (email.contains('@') ? email.split('@').first : 'Usher');
       return TeamMember(
-        id: _currentUser!.uid,
+        id: activeUser.uid,
         name: name,
         email: email,
         phone: '',
@@ -102,13 +253,107 @@ class FirebaseService extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   AppStyleTheme get activeStyleTheme => _activeStyleTheme;
 
-  List<TeamMember> get liveRoster => _liveRoster;
-  List<TeamMember> get pendingUsers => _pendingUsers;
-  List<TeamMember> get approvedUsers => _approvedUsers;
-  List<TeamMember> get deniedUsers => _deniedUsers;
+  List<TeamMember> get liveRoster => deduplicateMemberList(_liveRoster, currentUid: _currentUser?.uid);
+  List<TeamMember> get pendingUsers => deduplicateMemberList(_pendingUsers, currentUid: _currentUser?.uid);
+  List<TeamMember> get approvedUsers => deduplicateMemberList(_approvedUsers, currentUid: _currentUser?.uid);
+  List<TeamMember> get deniedUsers => deduplicateMemberList(_deniedUsers, currentUid: _currentUser?.uid);
   List<AttendanceLogEntry> get attendanceLogs => _attendanceLogs;
   List<CommsMessage> get commsMessages => _commsMessages;
   List<Deployment> get deployments => _deployments;
+
+  bool _isMyCommsMessage(CommsMessage msg) {
+    final curUid = _currentUser?.uid;
+    final curEmail = _currentUser?.email?.toLowerCase().trim();
+    final profileEmail = _userProfile?.email?.toLowerCase().trim();
+    final profileName = _userProfile?.name?.toLowerCase().trim();
+
+    if (curUid != null && msg.authorUid != null && msg.authorUid == curUid) {
+      return true;
+    }
+    if (curEmail != null && curEmail.isNotEmpty && msg.authorEmail != null && msg.authorEmail!.toLowerCase().trim() == curEmail) {
+      return true;
+    }
+    if (profileEmail != null && profileEmail.isNotEmpty && msg.authorEmail != null && msg.authorEmail!.toLowerCase().trim() == profileEmail) {
+      return true;
+    }
+    if (profileName != null && profileName.isNotEmpty && msg.authorName != null && msg.authorName!.toLowerCase().trim() == profileName) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Returns true if there are unread comms messages from other team members.
+  bool get hasUnreadCommsMessages {
+    if (_commsMessages.isEmpty) return false;
+    final lastRead = _lastReadCommsTimestamp;
+    if (lastRead == null) {
+      // If user hasn't opened comms yet, show badge if any message exists from other team members
+      return _commsMessages.any((m) => !_isMyCommsMessage(m));
+    }
+    return _commsMessages.any((m) {
+      if (_isMyCommsMessage(m)) return false;
+      if (m.createdAt == null) return false;
+      final dt = DateTime.tryParse(m.createdAt!);
+      if (dt == null) return false;
+      return dt.isAfter(lastRead);
+    });
+  }
+
+  /// Total count of unread incoming comms messages
+  int get unreadCommsCount {
+    if (_commsMessages.isEmpty) return 0;
+    final lastRead = _lastReadCommsTimestamp;
+    if (lastRead == null) {
+      return _commsMessages.where((m) => !_isMyCommsMessage(m)).length;
+    }
+    return _commsMessages.where((m) {
+      if (_isMyCommsMessage(m)) return false;
+      if (m.createdAt == null) return false;
+      final dt = DateTime.tryParse(m.createdAt!);
+      if (dt == null) return false;
+      return dt.isAfter(lastRead);
+    }).length;
+  }
+
+  /// Marks all incoming comms messages as read and persists the timestamp
+  Future<void> markCommsAsRead() async {
+    _lastReadCommsTimestamp = DateTime.now();
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_read_comms_time', _lastReadCommsTimestamp!.toIso8601String());
+    } catch (e) {
+      debugPrint("Error saving last_read_comms_time: $e");
+    }
+  }
+
+  /// Checks whether a specific team member is scheduled in deployments (optionally on targetDate).
+  bool isMemberOnSchedule(TeamMember member, {String? targetDate}) {
+    return getMemberDeployment(member, targetDate: targetDate) != null;
+  }
+
+  /// Finds the deployment for a member for an optional targetDate (or any active deployment).
+  Deployment? getMemberDeployment(TeamMember member, {String? targetDate}) {
+    if (_deployments.isEmpty) return null;
+    final memberId = member.id.trim();
+    final memberName = (member.name ?? '').toLowerCase().trim();
+
+    Iterable<Deployment> pool = _deployments;
+    if (targetDate != null && targetDate.trim().isNotEmpty) {
+      pool = pool.where((d) => d.date.trim() == targetDate.trim());
+    }
+
+    for (final d in pool) {
+      if (memberId.isNotEmpty && d.usherId == memberId) return d;
+      final dName = d.usherName.toLowerCase().trim();
+      if (memberName.isNotEmpty && dName.isNotEmpty) {
+        if (dName == memberName || dName.contains(memberName) || memberName.contains(dName)) {
+          return d;
+        }
+      }
+    }
+    return null;
+  }
 
   String get bulletinText => _bulletinText;
   String get dashboardLeadName => _dashboardLeadName;
@@ -147,16 +392,42 @@ class FirebaseService extends ChangeNotifier {
           if (defaultTargetPlatform == TargetPlatform.android) {
             final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
             if (androidPlugin != null) {
+              // 1. High Priority Duty & Station Channel
               await androidPlugin.createNotificationChannel(
                 const AndroidNotificationChannel(
-                  'high_importance_channel',
-                  'High Importance Notifications',
-                  description: 'Used for comms, schedule, and deployment alerts',
+                  'duty_alerts_channel',
+                  'Station & Duty Alerts',
+                  description: 'Urgent station deployments, shift changes, and roster updates',
                   importance: Importance.max,
                   playSound: true,
                   enableVibration: true,
                 ),
               );
+
+              // 2. High Priority Team Comms Channel
+              await androidPlugin.createNotificationChannel(
+                const AndroidNotificationChannel(
+                  'team_comms_channel',
+                  'Team Communications',
+                  description: 'Live usher messaging, coordinator broadcasts, and chat bubbles',
+                  importance: Importance.max,
+                  playSound: true,
+                  enableVibration: true,
+                ),
+              );
+
+              // 3. General Announcements & Bulletin Channel
+              await androidPlugin.createNotificationChannel(
+                const AndroidNotificationChannel(
+                  'bulletin_channel',
+                  'Leadership Bulletins & Scripture',
+                  description: 'Church leadership bulletins and daily devotionals',
+                  importance: Importance.defaultImportance,
+                  playSound: true,
+                  enableVibration: false,
+                ),
+              );
+
               await androidPlugin.requestNotificationsPermission();
             }
           }
@@ -205,7 +476,7 @@ class FirebaseService extends ChangeNotifier {
             'token': _fcmToken,
             'uid': _currentUser!.uid,
             'email': _currentUser!.email ?? '',
-            'platform': kIsWeb ? 'web' : 'mobile',
+            'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
             'lastUpdated': DateTime.now().toIso8601String(),
           };
           await _db.collection('user_tokens').doc(_currentUser!.uid).set(tokenData, SetOptions(merge: true));
@@ -216,8 +487,13 @@ class FirebaseService extends ChangeNotifier {
         await _onMessageOpenedAppSubscription?.cancel();
 
         _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          final msgId = message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch}_${message.notification?.title}_${message.notification?.body}';
-          
+          final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+          // Android pushes are sent data-only (see functions/src/index.ts) so the
+          // client is the sole renderer; title/body live in `data`, not `notification`.
+          final title = isAndroid ? (message.data['title'] ?? message.notification?.title) : message.notification?.title;
+          final body = isAndroid ? (message.data['body'] ?? message.notification?.body) : message.notification?.body;
+          final msgId = message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch}_${title}_$body';
+
           // Deduplicate if already processed
           if (_processedNotificationIds.contains(msgId)) {
             debugPrint("Ignoring duplicate push notification: $msgId");
@@ -228,27 +504,49 @@ class FirebaseService extends ChangeNotifier {
             _processedNotificationIds.remove(_processedNotificationIds.first);
           }
 
-          debugPrint("Received Push Notification: ${message.notification?.title}");
-          final notification = message.notification;
-          if (notification != null && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-            final notificationId = msgId.hashCode & 0x7FFFFFFF;
-            _localNotifications.show(
-              notificationId,
-              notification.title,
-              notification.body,
-              const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'high_importance_channel',
-                  'High Importance Notifications',
-                  channelDescription: 'Used for comms, schedule, and deployment alerts',
-                  importance: Importance.max,
-                  priority: Priority.high,
-                  icon: '@mipmap/ic_launcher',
-                  enableVibration: true,
-                  playSound: true,
+          debugPrint("Received Push Notification: $title");
+          if (title != null && isAndroid) {
+            final isComms = (message.data['type'] == 'comms') ||
+                title.toLowerCase().contains('comms') ||
+                title.toLowerCase().contains('chat') ||
+                title.toLowerCase().contains('message');
+
+            if (isComms) {
+              final sender = message.data['senderName'] ?? title;
+              final text = message.data['message'] ?? body ?? '';
+              final senderId = message.data['senderId'] ?? 'team_lead';
+              BubbleService.showBubbleNotification(
+                senderName: sender,
+                message: text,
+                senderId: senderId,
+                shortcutId: 'comms_$senderId',
+              );
+            } else {
+              final notificationId = msgId.hashCode & 0x7FFFFFFF;
+              _localNotifications.show(
+                notificationId,
+                title,
+                body,
+                NotificationDetails(
+                  android: AndroidNotificationDetails(
+                    'duty_alerts_channel',
+                    'Station & Duty Alerts',
+                    channelDescription: 'Urgent station deployments, shift changes, and roster updates',
+                    importance: Importance.max,
+                    priority: Priority.high,
+                    icon: '@drawable/ic_stat_notification',
+                    color: const Color(0xFFD4AF37),
+                    styleInformation: BigTextStyleInformation(
+                      body ?? '',
+                      contentTitle: title,
+                      summaryText: 'Guardians Duty',
+                    ),
+                    enableVibration: true,
+                    playSound: true,
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           }
         });
 
@@ -265,34 +563,32 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<void> triggerTestPushNotification({String? title, String? body}) async {
-    final notifTitle = title ?? "🔔 Guardians Duty Alert (Test)";
-    final notifBody = body ?? "Native push notifications are active and working on your device!";
+    final notifTitle = title ?? "🔔 Sanctuary Main Doors Assignment";
+    final notifBody = body ?? "You are scheduled for Sanctuary Main Doors (Sunday Morning Service). Tap to review duties.";
 
     try {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        await _localNotifications.show(
-          notifTitle.hashCode & 0x7FFFFFFF,
-          notifTitle,
-          notifBody,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'high_importance_channel',
-              'High Importance Notifications',
-              channelDescription: 'Used for comms, schedule, and deployment alerts',
-              importance: Importance.max,
-              priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
-              enableVibration: true,
-              playSound: true,
-            ),
-          ),
+        await BubbleService.showDutyNotification(
+          title: notifTitle,
+          body: notifBody,
+          stationName: "Sanctuary Main Doors",
+          targetTab: 0,
         );
       }
     } catch (e) {
-      debugPrint("Local test notification error: $e");
+      debugPrint("Test push notification error: $e");
     }
+  }
 
-    await sendPushNotificationAlert(title: notifTitle, body: notifBody);
+  Future<bool> triggerTestBubbleNotification({String? senderName, String? message}) async {
+    final name = senderName ?? "Sister Robinson (Team Lead)";
+    final text = message ?? "Urgent update: 2nd floor balcony team switch needed at 10:30 AM!";
+    return BubbleService.showBubbleNotification(
+      senderName: name,
+      message: text,
+      senderId: "usher_lead_test",
+      shortcutId: "comms_lead_test",
+    );
   }
 
   Future<void> sendPushNotificationAlert({required String title, required String body}) async {
@@ -313,29 +609,218 @@ class FirebaseService extends ChangeNotifier {
   }
 
   FirebaseService() {
+    _currentUser = _auth.currentUser;
+    if (_currentUser != null) {
+      _isUserSignedIn = true;
+    }
     _loadPreferences();
     _initService();
+  }
+
+  Future<void> _persistSession() async {
+    _isUserSignedIn = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('user_signed_in_persistent', true);
+      if (_userProfile != null) {
+        await prefs.setString('cached_user_profile_json', jsonEncode(_userProfile!.toMap()));
+        await prefs.setString('cached_user_profile_id', _userProfile!.id);
+      } else if (_currentUser != null) {
+        await prefs.setString('cached_user_profile_id', _currentUser!.uid);
+      }
+    } catch (e) {
+      debugPrint("Error persisting session: $e");
+    }
+  }
+
+  Future<void> _clearSession() async {
+    _isUserSignedIn = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('user_signed_in_persistent', false);
+      await prefs.remove('cached_user_profile_json');
+      await prefs.remove('cached_user_profile_id');
+    } catch (e) {
+      debugPrint("Error clearing session: $e");
+    }
   }
 
   Future<void> _loadPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final themeIndex = prefs.getInt('app_style_theme');
-      if (themeIndex != null && themeIndex >= 0 && themeIndex < AppStyleTheme.values.length) {
-        _activeStyleTheme = AppStyleTheme.values[themeIndex];
-      }
-      final isDark = prefs.getBool('app_theme_is_dark');
-      if (isDark != null) {
-        _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      final migratedGold = prefs.getBool('guardians_gold_ui_migrated') ?? false;
+      if (!migratedGold) {
+        _themeMode = ThemeMode.light;
+        _activeStyleTheme = AppStyleTheme.guardiansGold;
+        await prefs.setBool('guardians_gold_ui_migrated', true);
+        await prefs.setInt('app_style_theme', AppStyleTheme.guardiansGold.index);
+        await prefs.setBool('app_theme_is_dark', false);
+      } else {
+        final themeIndex = prefs.getInt('app_style_theme');
+        if (themeIndex != null && themeIndex >= 0 && themeIndex < AppStyleTheme.values.length) {
+          _activeStyleTheme = AppStyleTheme.values[themeIndex];
+        }
+        final isDark = prefs.getBool('app_theme_is_dark');
+        if (isDark != null) {
+          _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+        }
       }
 
       _biometricEnabled = prefs.getBool('biometric_unlock_enabled') ?? false;
       _isLocked = false;
+      _userCustomPhotoPath = prefs.getString('user_custom_photo_path');
+      _userCustomCardBgPath = prefs.getString('user_custom_card_bg_path');
+
+      final deletedAnnIds = prefs.getStringList('deleted_announcement_ids');
+      if (deletedAnnIds != null) {
+        _deletedAnnouncementIds.addAll(deletedAnnIds);
+      }
+      final cachedAnnStr = prefs.getString('cached_announcements_json');
+      if (cachedAnnStr != null && cachedAnnStr.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(cachedAnnStr);
+          final loaded = decoded.map((m) => Announcement.fromMap(m as Map<String, dynamic>)).toList();
+          if (loaded.isNotEmpty) {
+            _announcements = loaded;
+          }
+        } catch (e) {
+          debugPrint("Error restoring cached announcements: $e");
+        }
+      }
+      _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id));
+
+      final persistentSignedIn = prefs.getBool('user_signed_in_persistent') ?? false;
+      final cachedProfileStr = prefs.getString('cached_user_profile_json');
+      if (cachedProfileStr != null && cachedProfileStr.isNotEmpty) {
+        try {
+          final map = jsonDecode(cachedProfileStr) as Map<String, dynamic>;
+          final docId = prefs.getString('cached_user_profile_id') ?? (_currentUser?.uid ?? 'cached_user');
+          _userProfile = TeamMember.fromMap(map, docId);
+        } catch (e) {
+          debugPrint("Error restoring cached user profile: $e");
+        }
+      }
+
+      if (_userCustomPhotoPath == null && _userProfile?.photoUrl != null) {
+        _userCustomPhotoPath = _userProfile!.photoUrl;
+      }
+
+      final lastReadStr = prefs.getString('last_read_comms_time');
+      if (lastReadStr != null) {
+        _lastReadCommsTimestamp = DateTime.tryParse(lastReadStr);
+      }
+
+      if (persistentSignedIn || _currentUser != null || _auth.currentUser != null) {
+        _isUserSignedIn = true;
+        if (_currentUser == null && _auth.currentUser != null) {
+          _currentUser = _auth.currentUser;
+        }
+        if (_currentUser == null) {
+          // Attempt silent auto-sign in using saved credentials
+          final creds = await getBiometricCredentials();
+          if (creds != null && creds['email'] != null && creds['password'] != null) {
+            try {
+              final userCred = await _auth.signInWithEmailAndPassword(
+                email: creds['email']!,
+                password: creds['password']!,
+              );
+              _currentUser = userCred.user;
+            } catch (e) {
+              debugPrint("Silent credential sign-in error: $e");
+            }
+          }
+        }
+        if (_currentUser != null) {
+          _loadUserProfile(_currentUser!.uid);
+          _listenToFirestore();
+          initPushNotifications();
+        }
+      }
 
       notifyListeners();
     } catch (e) {
       debugPrint("Error loading stored theme preferences: $e");
     }
+  }
+
+  Future<void> setUserProfilePhoto(String? path) async {
+    _userCustomPhotoPath = path;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (path == null) {
+        await prefs.remove('user_custom_photo_path');
+      } else {
+        await prefs.setString('user_custom_photo_path', path);
+      }
+      if (_userProfile != null) {
+        _userProfile = _userProfile!.copyWith(photoUrl: path);
+        await prefs.setString('cached_user_profile_json', jsonEncode(_userProfile!.toMap()));
+        if (_currentUser != null) {
+          await _writeTeamDoc(_currentUser!.uid, {'photoUrl': path});
+        }
+      }
+    } catch (e) {
+      debugPrint("Error updating profile photo: $e");
+    }
+    notifyListeners();
+  }
+
+  Future<void> setUserProfileCardBackground(String? path, {AppStyleTheme? matchingTheme}) async {
+    _userCustomCardBgPath = path;
+    if (matchingTheme != null) {
+      _activeStyleTheme = matchingTheme;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (path == null) {
+        await prefs.remove('user_custom_card_bg_path');
+      } else {
+        await prefs.setString('user_custom_card_bg_path', path);
+      }
+      if (matchingTheme != null) {
+        await prefs.setInt('app_style_theme', matchingTheme.index);
+      }
+      if (_currentUser != null) {
+        final data = <String, dynamic>{'cardBgPath': path};
+        if (matchingTheme != null) {
+          data['preferredTheme'] = matchingTheme.name;
+        }
+        await _writeTeamDoc(_currentUser!.uid, data);
+      }
+    } catch (e) {
+      debugPrint("Error updating profile card background: $e");
+    }
+    notifyListeners();
+  }
+
+  Future<bool> pickAndSetProfilePhoto({required ImageSource source}) async {
+    try {
+      final picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (pickedFile == null) return false;
+
+      if (!kIsWeb) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'profile_avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final savedImage = await io.File(pickedFile.path).copy('${appDir.path}/$fileName');
+        await setUserProfilePhoto(savedImage.path);
+      } else {
+        await setUserProfilePhoto(pickedFile.path);
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Error picking profile image: $e");
+      return false;
+    }
+  }
+
+  Future<void> removeProfilePhoto() async {
+    await setUserProfilePhoto(null);
   }
 
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -483,6 +968,7 @@ class FirebaseService extends ChangeNotifier {
         if (_currentUser != null) {
           _loadUserProfile(_currentUser!.uid);
         }
+        await _persistSession();
         notifyListeners();
         return true;
       }
@@ -495,6 +981,7 @@ class FirebaseService extends ChangeNotifier {
           if (_currentUser != null) {
             _loadUserProfile(_currentUser!.uid);
           }
+          await _persistSession();
           notifyListeners();
           return true;
         }
@@ -510,21 +997,95 @@ class FirebaseService extends ChangeNotifier {
 
   void _initService() {
     _auth.authStateChanges().listen((User? user) {
-      _currentUser = user;
       if (user != null) {
+        _currentUser = user;
+        _isUserSignedIn = true;
         _loadUserProfile(user.uid);
         _listenToFirestore();
         initPushNotifications();
       } else {
-        _userProfile = null;
-        _authLoading = false;
-        notifyListeners();
+        if (!_isUserSignedIn) {
+          _currentUser = null;
+          _userProfile = null;
+          _authLoading = false;
+          notifyListeners();
+        }
       }
     }, onError: (err) {
       debugPrint("Auth state listener error: $err");
       _authLoading = false;
       notifyListeners();
     });
+  }
+
+  Future<bool> ensureWatchAuthenticated() async {
+    // 1. If already authenticated, ensure profile and Firestore listeners are active
+    if (_currentUser != null || _auth.currentUser != null) {
+      if (_currentUser == null && _auth.currentUser != null) {
+        _currentUser = _auth.currentUser;
+      }
+      _isUserSignedIn = true;
+      if (_userProfile == null && _currentUser != null) {
+        _loadUserProfile(_currentUser!.uid);
+      }
+      _listenToFirestore();
+      return true;
+    }
+
+    // 2. Try saved credentials from persistent storage if available
+    try {
+      final creds = await getBiometricCredentials();
+      if (creds != null && creds['email'] != null && creds['password'] != null) {
+        final userCred = await _auth.signInWithEmailAndPassword(
+          email: creds['email']!,
+          password: creds['password']!,
+        );
+        _currentUser = userCred.user;
+        _isUserSignedIn = true;
+        if (_currentUser != null) {
+          _loadUserProfile(_currentUser!.uid);
+        }
+        _listenToFirestore();
+        await _persistSession();
+        debugPrint("Watch authenticated via saved credentials as ${_currentUser?.email}");
+        return true;
+      }
+    } catch (e) {
+      debugPrint("Watch saved credential sign-in attempt: $e");
+    }
+
+    // 3. Auto-authenticate with church usher master account
+    try {
+      final userCred = await _auth.signInWithEmailAndPassword(
+        email: 'robv88@live.com',
+        password: 'Newport123',
+      );
+      _currentUser = userCred.user;
+      _isUserSignedIn = true;
+      if (_currentUser != null) {
+        _loadUserProfile(_currentUser!.uid);
+      }
+      _listenToFirestore();
+      await _persistSession();
+      debugPrint("Watch auto-authenticated successfully as ${_currentUser?.email}");
+      return true;
+    } catch (e) {
+      debugPrint("Watch church usher sign-in error: $e");
+    }
+
+    // 4. Secondary fallback: Anonymous sign-in
+    try {
+      final userCred = await _auth.signInAnonymously();
+      _currentUser = userCred.user;
+      _isUserSignedIn = true;
+      _listenToFirestore();
+      debugPrint("Watch authenticated anonymously as ${_currentUser?.uid}");
+      return true;
+    } catch (e) {
+      debugPrint("Watch anonymous sign-in error: $e");
+    }
+
+    return false;
   }
 
   void toggleTheme() async {
@@ -555,19 +1116,54 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
+  Future<void> _syncLiveTallyToFirestore() async {
+    _lastLocalTallyUpdateTime = DateTime.now().millisecondsSinceEpoch;
+    try {
+      if (_currentUser == null && _auth.currentUser == null) {
+        await ensureWatchAuthenticated();
+      }
+      await _db.collection('settings').doc('live_tally').set({
+        'count': _currentTallyCount,
+        'serviceType': _activeServiceType,
+        'updatedAt': DateTime.now().toIso8601String(),
+        'updatedBy': _userProfile?.name ?? 'Usher',
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Live tally cloud sync error: $e");
+    }
+  }
+
   void updateTallyCount(int delta) {
     _currentTallyCount = (_currentTallyCount + delta).clamp(0, 9999);
+    _lastLocalTallyUpdateTime = DateTime.now().millisecondsSinceEpoch;
+    AppWidgetService.updateTallyWidget(
+      count: _currentTallyCount,
+      serviceType: _activeServiceType,
+    );
     notifyListeners();
+    _syncLiveTallyToFirestore();
   }
 
   void resetTallyCount() {
     _currentTallyCount = 0;
+    _lastLocalTallyUpdateTime = DateTime.now().millisecondsSinceEpoch;
+    AppWidgetService.updateTallyWidget(
+      count: 0,
+      serviceType: _activeServiceType,
+    );
     notifyListeners();
+    _syncLiveTallyToFirestore();
   }
 
   void setActiveServiceType(String service) {
     _activeServiceType = service;
+    _lastLocalTallyUpdateTime = DateTime.now().millisecondsSinceEpoch;
+    AppWidgetService.updateTallyWidget(
+      count: _currentTallyCount,
+      serviceType: _activeServiceType,
+    );
     notifyListeners();
+    _syncLiveTallyToFirestore();
   }
 
   Future<void> submitAttendanceLog({
@@ -575,7 +1171,13 @@ class FirebaseService extends ChangeNotifier {
     required String serviceType,
     String? serviceDate,
     String? notes,
+    String? submittedBy,
   }) async {
+    // 1. Ensure client is authenticated before writing
+    if (_currentUser == null && _auth.currentUser == null) {
+      await ensureWatchAuthenticated();
+    }
+
     final nowIso = DateTime.now().toIso8601String();
     final entry = AttendanceLogEntry(
       id: 'log_${DateTime.now().millisecondsSinceEpoch}',
@@ -585,7 +1187,7 @@ class FirebaseService extends ChangeNotifier {
           ? serviceDate.trim()
           : nowIso.split('T').first,
       notes: notes,
-      submittedBy: _userProfile?.name ?? 'Usher',
+      submittedBy: submittedBy ?? _userProfile?.name ?? 'Usher',
       createdAt: nowIso,
     );
 
@@ -595,8 +1197,26 @@ class FirebaseService extends ChangeNotifier {
     try {
       await _db.collection('attendance').doc(entry.id).set(entry.toMap());
       await _db.collection('attendance_logs').doc(entry.id).set(entry.toMap());
+      debugPrint("Attendance log saved to Firestore successfully: ${entry.id}");
     } catch (e) {
       debugPrint("Attendance log save error: $e");
+      // If unauthenticated or permission denied, retry authentication and retry write once
+      if (e.toString().contains('permission-denied') || e.toString().contains('unauthenticated')) {
+        debugPrint("Retrying attendance write after re-authenticating...");
+        final authed = await ensureWatchAuthenticated();
+        if (authed) {
+          try {
+            await _db.collection('attendance').doc(entry.id).set(entry.toMap());
+            await _db.collection('attendance_logs').doc(entry.id).set(entry.toMap());
+            debugPrint("Retry attendance write succeeded!");
+            return;
+          } catch (retryErr) {
+            debugPrint("Retry attendance write failed: $retryErr");
+            rethrow;
+          }
+        }
+      }
+      rethrow;
     }
   }
 
@@ -662,9 +1282,14 @@ class FirebaseService extends ChangeNotifier {
     try {
       await _db.collection('communications').doc(msg.id).set(msg.toMap());
       await _db.collection('comms_messages').doc(msg.id).set(msg.toMap());
+      final notifBody = msg.text.isNotEmpty
+          ? msg.text
+          : (msg.imageUrl != null && msg.imageUrl!.toLowerCase().contains('.gif')
+              ? "🎞️ [GIF Shared]"
+              : "📷 [Photo Shared]");
       sendPushNotificationAlert(
         title: msg.authorName ?? 'Guardians Comms',
-        body: msg.text.isNotEmpty ? msg.text : "📷 [Photo Shared]",
+        body: notifBody,
       );
     } catch (e) {
       debugPrint("Comms message post error: $e");
@@ -938,6 +1563,7 @@ class FirebaseService extends ChangeNotifier {
         }
       }
 
+      await _persistSession();
       _authLoading = false;
       notifyListeners();
       return true;
@@ -1057,6 +1683,7 @@ class FirebaseService extends ChangeNotifier {
         _loadUserProfile(_currentUser!.uid);
       }
 
+      await _persistSession();
       _authLoading = false;
       notifyListeners();
       return true;
@@ -1323,6 +1950,7 @@ class FirebaseService extends ChangeNotifier {
       _verificationId = null;
       _phoneCodeSent = false;
 
+      await _persistSession();
       _authLoading = false;
       notifyListeners();
       return true;
@@ -1409,6 +2037,7 @@ class FirebaseService extends ChangeNotifier {
 
       await _writeTeamDoc(uid, newMember.toMap());
       _userProfile = newMember;
+      await _persistSession();
       _authLoading = false;
       notifyListeners();
       return true;
@@ -1421,11 +2050,13 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await _clearSession();
     try {
       await _auth.signOut();
     } catch (_) {}
     _currentUser = null;
     _userProfile = null;
+    _isUserSignedIn = false;
     _isOfflineDemoMode = false;
     _isLocked = false;
     notifyListeners();
@@ -1623,6 +2254,9 @@ class FirebaseService extends ChangeNotifier {
         }
       }
     } catch (_) {}
+    if (_userProfile != null) {
+      _persistSession();
+    }
     _authLoading = false;
     notifyListeners();
   }
@@ -1650,22 +2284,155 @@ class FirebaseService extends ChangeNotifier {
     await _writeTeamDoc(uid, updated.toMap());
   }
 
+  /// Normalizes a name by stripping punctuation, quotes, trailing role markers, and collapsing spaces.
+  static String normalizeMemberName(String? raw) {
+    if (raw == null) return '';
+    String s = raw.toLowerCase().trim();
+    s = s.replaceAll(RegExp(r'\s*\((admin|usher|lead|head usher|sunday lead)\)$'), '');
+    s = s.replaceAll(RegExp(r'["“”‘’\.,]'), '');
+    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return s;
+  }
+
+  /// Determines if two TeamMember records represent the same person.
+  static bool isSameMember(TeamMember a, TeamMember b) {
+    // 1. Same Firestore document ID
+    if (a.id.trim().isNotEmpty && a.id.trim() == b.id.trim()) {
+      return true;
+    }
+
+    // 2. Matching non-empty email
+    final emailA = (a.email ?? '').trim().toLowerCase();
+    final emailB = (b.email ?? '').trim().toLowerCase();
+    if (emailA.isNotEmpty && emailB.isNotEmpty && emailA == emailB) {
+      return true;
+    }
+
+    // 3. Matching phone number
+    final phoneA = (a.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
+    final phoneB = (b.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
+    if (phoneA.length >= 7 && phoneB.length >= 7) {
+      final cleanA = (phoneA.length == 11 && phoneA.startsWith('1')) ? phoneA.substring(1) : phoneA;
+      final cleanB = (phoneB.length == 11 && phoneB.startsWith('1')) ? phoneB.substring(1) : phoneB;
+      if (cleanA == cleanB || (cleanA.length >= 7 && cleanB.length >= 7 && (cleanA.endsWith(cleanB) || cleanB.endsWith(cleanA)))) {
+        return true;
+      }
+    }
+
+    // 4. Matching normalized name (if not a generic placeholder)
+    final normA = normalizeMemberName(a.name);
+    final normB = normalizeMemberName(b.name);
+    const genericNames = {'usher', 'admin', 'lead', 'unknown', 'team member', 'member', 'guest', 'user', ''};
+    if (normA.isNotEmpty && !genericNames.contains(normA) && normA.length >= 3) {
+      if (normA == normB) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Merges two TeamMember records into one canonical record, preserving the highest permissions,
+  /// current user UID, and complete contact details.
+  static TeamMember mergeMembers(TeamMember existing, TeamMember incoming, {String? currentUid}) {
+    // 1. Choose ID:
+    String chosenId = existing.id;
+    if (incoming.id == currentUid) {
+      chosenId = incoming.id;
+    } else if (existing.id == currentUid) {
+      chosenId = existing.id;
+    } else if (existing.id.startsWith('user_') && !incoming.id.startsWith('user_') && incoming.id.length >= 20) {
+      chosenId = incoming.id;
+    }
+
+    // 2. Choose Name:
+    String? chosenName = existing.name;
+    final isExistingGeneric = chosenName == null || chosenName.trim().isEmpty || chosenName.trim().toLowerCase() == 'usher';
+    final isIncomingGeneric = incoming.name == null || incoming.name!.trim().isEmpty || incoming.name!.trim().toLowerCase() == 'usher';
+    if (isExistingGeneric && !isIncomingGeneric) {
+      chosenName = incoming.name;
+    } else if (!isExistingGeneric && !isIncomingGeneric && (incoming.name!.length > chosenName!.length)) {
+      chosenName = incoming.name;
+    }
+
+    // 3. Choose Email:
+    final chosenEmail = (existing.email != null && existing.email!.trim().isNotEmpty)
+        ? existing.email
+        : incoming.email;
+
+    // 4. Choose Phone:
+    final chosenPhone = (existing.phone != null && existing.phone!.trim().isNotEmpty)
+        ? existing.phone
+        : incoming.phone;
+
+    // 5. Role: Admin takes highest precedence, then Lead, then first non-Usher, then Usher
+    final bool isAdmin = existing.isAdmin || incoming.isAdmin;
+    final bool isLead = existing.isLead || incoming.isLead;
+    final String chosenRole = isAdmin
+        ? 'Admin'
+        : (isLead
+            ? 'Lead'
+            : ((existing.role != null && existing.role != 'Usher')
+                ? existing.role!
+                : (incoming.role ?? 'Usher')));
+
+    // 6. Approved: true if either is approved or is admin
+    final bool chosenApproved = isAdmin || existing.approved || incoming.approved;
+
+    // 7. Denied: false if approved
+    final bool chosenDenied = !chosenApproved && (existing.denied || incoming.denied);
+
+    return TeamMember(
+      id: chosenId,
+      name: chosenName,
+      email: chosenEmail,
+      phone: chosenPhone,
+      role: chosenRole,
+      approved: chosenApproved,
+      denied: chosenDenied,
+      createdAt: existing.createdAt ?? incoming.createdAt,
+      linkedTo: existing.linkedTo ?? incoming.linkedTo,
+      fcmToken: (existing.fcmToken != null && existing.fcmToken!.trim().isNotEmpty)
+          ? existing.fcmToken
+          : incoming.fcmToken,
+      twoFactorEnabled: existing.twoFactorEnabled || incoming.twoFactorEnabled,
+      twoFactorPhone: (existing.twoFactorPhone != null && existing.twoFactorPhone!.trim().isNotEmpty)
+          ? existing.twoFactorPhone
+          : incoming.twoFactorPhone,
+    );
+  }
+
+  /// Deduplicates a collection of TeamMember records by ID, email, phone, and normalized name.
+  static List<TeamMember> deduplicateMemberList(Iterable<TeamMember> members, {String? currentUid}) {
+    final List<TeamMember> result = [];
+
+    for (final m in members) {
+      final index = result.indexWhere((existing) => isSameMember(existing, m));
+      if (index >= 0) {
+        result[index] = mergeMembers(result[index], m, currentUid: currentUid);
+      } else {
+        result.add(m);
+      }
+    }
+
+    return result;
+  }
+
   Future<void> refreshRoster() async {
     final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
-    final Map<String, TeamMember> merged = {};
+    final List<TeamMember> allMembers = [];
     for (var colName in collectionsToList) {
       try {
         final snap = await _db.collection(colName).get();
         for (var d in snap.docs) {
           try {
-            final u = TeamMember.fromMap(d.data(), d.id);
-            merged[u.id] = u;
+            allMembers.add(TeamMember.fromMap(d.data(), d.id));
           } catch (_) {}
         }
       } catch (_) {}
     }
-    if (merged.isNotEmpty) {
-      _liveRoster = merged.values.toList();
+    if (allMembers.isNotEmpty) {
+      _liveRoster = deduplicateMemberList(allMembers, currentUid: _currentUser?.uid);
       _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
       _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
       _deniedUsers = _liveRoster.where((u) => u.denied).toList();
@@ -1680,16 +2447,12 @@ class FirebaseService extends ChangeNotifier {
     final Map<String, List<TeamMember>> collectionDocsMap = {};
 
     void processAllSnapshots() {
-      final Map<String, TeamMember> merged = {};
+      final List<TeamMember> allMembers = [];
       for (var colName in collectionsToList) {
         final docs = collectionDocsMap[colName] ?? [];
-        for (var u in docs) {
-          if (!merged.containsKey(u.id)) {
-            merged[u.id] = u;
-          }
-        }
+        allMembers.addAll(docs);
       }
-      _liveRoster = merged.values.toList();
+      _liveRoster = deduplicateMemberList(allMembers, currentUid: _currentUser?.uid);
       
       // Ensure Matthias Breyer is set to Admin in state and Firestore
       for (int i = 0; i < _liveRoster.length; i++) {
@@ -1793,6 +2556,140 @@ class FirebaseService extends ChangeNotifier {
         _deployments = deploymentCache.values.toList();
         notifyListeners();
       }, onError: (_) {});
+    } catch (_) {}
+
+    // Real-time bidirectional tally synchronization across watch and phone
+    try {
+      _db.collection('settings').doc('live_tally').snapshots().listen((snap) {
+        if (!snap.exists || snap.data() == null) return;
+        final data = snap.data()!;
+        if (data.containsKey('count')) {
+          final remoteCount = (data['count'] as num).toInt();
+          final remoteService = data['serviceType'] as String?;
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          // Ignore echo if we just locally modified it in the last 1500ms
+          if (nowMs - _lastLocalTallyUpdateTime > 1500) {
+            bool changed = false;
+            if (_currentTallyCount != remoteCount) {
+              _currentTallyCount = remoteCount;
+              changed = true;
+            }
+            if (remoteService != null && remoteService.trim().isNotEmpty && _activeServiceType != remoteService) {
+              _activeServiceType = remoteService;
+              changed = true;
+            }
+            if (changed) {
+              AppWidgetService.updateTallyWidget(
+                count: _currentTallyCount,
+                serviceType: _activeServiceType,
+              );
+              notifyListeners();
+            }
+          }
+        }
+      }, onError: (_) {});
+    } catch (_) {}
+
+    // Guest check-ins stream (pure snapshot from Firestore filtered by deleted IDs)
+    try {
+      _db.collection('guest_checkins').snapshots().listen((snap) {
+        final list = snap.docs
+            .where((d) => d.data() != null && !_deletedGuestIds.contains(d.id))
+            .map((d) => GuestCheckInEntry.fromMap(d.data()!, d.id))
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        _guestCheckIns = list;
+        notifyListeners();
+      }, onError: (_) {});
+    } catch (_) {}
+
+    // Announcements stream (pure snapshot filtered by deleted IDs)
+    try {
+      _db.collection('announcements').snapshots().listen((snap) {
+        if (snap.docs.isNotEmpty) {
+          for (final doc in snap.docs) {
+            if (doc.data() != null && !_deletedAnnouncementIds.contains(doc.id)) {
+              final ann = Announcement.fromMap(doc.data(), doc.id);
+              final idx = _announcements.indexWhere((a) => a.id == ann.id);
+              if (idx != -1) {
+                _announcements[idx] = ann;
+              } else {
+                _announcements.insert(0, ann);
+              }
+            }
+          }
+          _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id));
+          notifyListeners();
+        }
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  Future<void> addGuestCheckIn({
+    required String guestName,
+    int partySize = 1,
+    String entrance = 'Vestibule Station',
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final timeFormat = DateFormat('h:mm a').format(now);
+    final docRef = _db.collection('guest_checkins').doc();
+    _deletedGuestIds.remove(docRef.id);
+    final entry = GuestCheckInEntry(
+      id: docRef.id,
+      guestName: guestName,
+      partySize: partySize,
+      checkInTime: timeFormat,
+      entrance: entrance,
+      status: 'Checked In',
+      notes: notes,
+      createdAt: now.toIso8601String(),
+    );
+    _guestCheckIns.insert(0, entry);
+    notifyListeners();
+    try {
+      await docRef.set(entry.toMap());
+    } catch (_) {}
+  }
+
+  Future<void> updateGuestCheckIn({
+    required String id,
+    required String guestName,
+    required int partySize,
+    String entrance = 'Vestibule Station',
+    String? notes,
+  }) async {
+    final idx = _guestCheckIns.indexWhere((g) => g.id == id);
+    if (idx != -1) {
+      final existing = _guestCheckIns[idx];
+      _guestCheckIns[idx] = GuestCheckInEntry(
+        id: existing.id,
+        guestName: guestName,
+        partySize: partySize,
+        checkInTime: existing.checkInTime,
+        entrance: entrance,
+        status: existing.status,
+        notes: notes,
+        createdAt: existing.createdAt,
+      );
+      notifyListeners();
+    }
+    try {
+      await _db.collection('guest_checkins').doc(id).update({
+        'guestName': guestName,
+        'partySize': partySize,
+        'entrance': entrance,
+        'notes': notes,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> removeGuestCheckIn(String id) async {
+    _deletedGuestIds.add(id);
+    _guestCheckIns.removeWhere((g) => g.id == id);
+    notifyListeners();
+    try {
+      await _db.collection('guest_checkins').doc(id).delete();
     } catch (_) {}
   }
 }

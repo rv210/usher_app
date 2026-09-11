@@ -7,7 +7,7 @@
       "part": "PART 1",
       "part_title": "Spiritual Foundation & Purpose",
       "title": "The Divine Calling of the Church Usher",
-      "subtitle": "The Supernatural Ministry of Helps (1 Cor. 12:28 & Psalm 84:10)",
+      "subtitle": "The Supernatural Ministry of Helps (1 Cor. 12:28 & Psalm 84:10 NIV)",
       "start_page": 1,
       "end_page": 12,
       "read_time_minutes": 5,
@@ -18,17 +18,17 @@
         },
         {
           "type": "scripture",
-          "text": "God hath set some in the church, first apostles, secondarily prophets, thirdly teachers, after that miracles, then gifts of healing, HELPS, governments, diversities of tongues.",
-          "reference": "1 Corinthians 12:28"
+          "text": "And God has placed in the church first of all apostles, second prophets, third teachers, then miracles, then gifts of healing, of helping, of guidance, and of different kinds of tongues.",
+          "reference": "1 Corinthians 12:28 (NIV)"
         },
         {
           "type": "text",
-          "text": "The Apostle Paul lists the ministry of HELPS alongside apostles and teachers as an essential pillar in the local church. When you put on your badge and step into your station, you are functioning as a frontline guardian of God’s house, preparing hearts to receive the incorruptible seed of God’s Word."
+          "text": "The Apostle Paul lists the ministry of helping alongside apostles and teachers as an essential pillar in the local church. When you put on your badge and step into your station, you are functioning as a frontline guardian of God’s house, preparing hearts to receive the incorruptible seed of God’s Word."
         },
         {
           "type": "scripture",
-          "text": "For a day in thy courts is better than a thousand. I had rather be a doorkeeper in the house of my God, than to dwell in the tents of wickedness.",
-          "reference": "Psalm 84:10"
+          "text": "Better is one day in your courts than a thousand elsewhere; I would rather be a doorkeeper in the house of my God than dwell in the tents of the wicked.",
+          "reference": "Psalm 84:10 (NIV)"
         },
         {
           "type": "heading",
@@ -44,24 +44,24 @@
         },
         {
           "type": "bullet",
-          "text": "• MEETERS: Discerning the special needs of newcomers, families with small children, and elderly worshippers."
+          "text": "• MEETERS: Actively discerning visitor needs, assisting families with small children, and escorting guests."
         },
         {
           "type": "bullet",
-          "text": "• SEATERS: Skillfully managing sanctuary flow so rows fill smoothly without crowding or awkward confusion."
+          "text": "• SEATERS: Harmoniously directing the congregation to maximize sanctuary capacity without friction."
         },
         {
           "type": "bullet",
-          "text": "• HELPERS: Supporting the Senior Pastor, ministerial staff, and worship team to ensure seamless service execution."
+          "text": "• HELPERS: Swiftly assisting pastors, ministry staff, and congregants in whatever need arises during service."
         }
       ]
     },
     {
       "id": "ch_2",
       "part": "PART 1",
-      "part_title": "Sanctuary Dynamics",
-      "title": "Sanctuary Order & The Art of Seating",
-      "subtitle": "Decency, Crowd Flow, and Accessibility Care (1 Cor. 14:40)",
+      "part_title": "Sanctuary Decorum & Seating",
+      "title": "Sanctuary Protocol & Crowd Flow",
+      "subtitle": "Decency, Order and Flow Dynamics (1 Cor. 14:40 NIV)",
       "start_page": 13,
       "end_page": 26,
       "read_time_minutes": 6,
@@ -72,8 +72,8 @@
         },
         {
           "type": "scripture",
-          "text": "Let all things be done decently and in order.",
-          "reference": "1 Corinthians 14:40"
+          "text": "But everything should be done in a fitting and orderly way.",
+          "reference": "1 Corinthians 14:40 (NIV)"
         },
         {
           "type": "heading",
@@ -102,7 +102,7 @@
       "part": "PART 2",
       "part_title": "Financial Stewardship",
       "title": "Tithes, Offerings & Financial Integrity",
-      "subtitle": "Reverent Collection & Dual Custody Protocols (Col. 3:23-24)",
+      "subtitle": "Reverent Collection & Dual Custody Protocols (Col. 3:23-24 NIV)",
       "start_page": 27,
       "end_page": 38,
       "read_time_minutes": 5,
@@ -113,8 +113,8 @@
         },
         {
           "type": "scripture",
-          "text": "And whatsoever ye do, do it heartily, as to the Lord, and not unto men; knowing that of the Lord ye shall receive the reward of the inheritance: for ye serve the Lord Christ.",
-          "reference": "Colossians 3:23,24"
+          "text": "Whatever you do, work at it with all your heart, as working for the Lord, not for human masters, since you know that you will receive an inheritance from the Lord as a reward. It is the Lord Christ you are serving.",
+          "reference": "Colossians 3:23-24 (NIV)"
         },
         {
           "type": "heading",
@@ -134,16 +134,16 @@
         },
         {
           "type": "bullet",
-          "text": "• Dual-Custody Escort: All collected funds must immediately be escorted by two unrelated appointed ushers directly to the church depository or secured counting room."
+          "text": "• Dual-Custody Rule: Once collected, offerings must always be secured and escorted by two unrelated, verified team members directly to the counting room or depository safe."
         }
       ]
     },
     {
       "id": "ch_4",
       "part": "PART 2",
-      "part_title": "Holy Ordinances",
+      "part_title": "Sacred Ordinances",
       "title": "Holy Communion & Special Services",
-      "subtitle": "Orderly Distribution and Sacred Reverence (Acts 6:3-5)",
+      "subtitle": "Orderly Distribution and Sacred Reverence (Acts 6:3-5 NIV)",
       "start_page": 39,
       "end_page": 50,
       "read_time_minutes": 5,
@@ -154,8 +154,8 @@
         },
         {
           "type": "scripture",
-          "text": "Wherefore, brethren, look ye out among you seven men of honest report, full of the Holy Ghost and wisdom, whom we may appoint over this business. But we will give ourselves continually to prayer, and to the ministry of the word. And the saying pleased the whole multitude: and they chose Stephen, a man full of faith and of the Holy Ghost.",
-          "reference": "Acts 6:3-5"
+          "text": "Brothers and sisters, choose seven men from among you who are known to be full of the Spirit and wisdom. We will turn this responsibility over to them and will give our attention to prayer and the ministry of the word. This proposal pleased the whole group. They chose Stephen, a man full of faith and of the Holy Spirit.",
+          "reference": "Acts 6:3-5 (NIV)"
         },
         {
           "type": "heading",
@@ -180,7 +180,7 @@
       "part": "PART 3",
       "part_title": "Safety & Peacekeeping",
       "title": "Safety, Distraction Prevention & Medical Protocols",
-      "subtitle": "The Watchman on the Wall (Eph. 4:27 & 1 Thess. 5:14-15)",
+      "subtitle": "The Watchman on the Wall (Eph. 4:27 & 1 Thess. 5:14 NIV)",
       "start_page": 51,
       "end_page": 68,
       "read_time_minutes": 6,
@@ -191,13 +191,13 @@
         },
         {
           "type": "scripture",
-          "text": "Neither give place to the devil.",
-          "reference": "Ephesians 4:27"
+          "text": "and do not give the devil a foothold.",
+          "reference": "Ephesians 4:27 (NIV)"
         },
         {
           "type": "scripture",
-          "text": "Now we exhort you, brethren, warn them that are unruly, comfort the feebleminded, support the weak, be patient toward all men.",
-          "reference": "1 Thessalonians 5:14,15"
+          "text": "And we urge you, brothers and sisters, warn those who are idle and disruptive, encourage the disheartened, help the weak, be patient with everyone.",
+          "reference": "1 Thessalonians 5:14 (NIV)"
         },
         {
           "type": "heading",
@@ -222,7 +222,7 @@
       "part": "PART 3",
       "part_title": "Excellence & Covenant",
       "title": "Ministry Proverbs & The Doorkeeper’s Covenant",
-      "subtitle": "Timeless Wisdom and Daily Dedication (Romans 12:7)",
+      "subtitle": "Timeless Wisdom and Daily Dedication (Romans 12:7 NIV)",
       "start_page": 69,
       "end_page": 80,
       "read_time_minutes": 4,
@@ -233,8 +233,8 @@
         },
         {
           "type": "scripture",
-          "text": "Or ministry, let us wait on our ministering: or he that teacheth, on teaching.",
-          "reference": "Romans 12:7"
+          "text": "if it is serving, then serve; if it is teaching, then teach;",
+          "reference": "Romans 12:7 (NIV)"
         },
         {
           "type": "heading",

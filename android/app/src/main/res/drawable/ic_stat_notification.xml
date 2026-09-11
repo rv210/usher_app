@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Clean silhouette of a guardian shield with an illuminated cross cutout -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,1 L3,5 v6 c0,5.55 3.84,10.74 9,12 c5.16,-1.26 9,-6.45 9,-12 V5 L12,1 z M13,7 h-2 v3 H8 v2 h3 v5 h2 v-5 h3 v-2 h-3 V7 z" />
+</vector>

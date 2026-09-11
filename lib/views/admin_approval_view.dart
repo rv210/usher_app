@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/team_member.dart';
 import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
+import 'announcements_view.dart';
 
 class AdminApprovalView extends StatefulWidget {
   const AdminApprovalView({super.key});
@@ -14,21 +15,6 @@ class AdminApprovalView extends StatefulWidget {
 }
 
 class _AdminApprovalViewState extends State<AdminApprovalView> {
-  late TextEditingController _bulletinController;
-
-  @override
-  void initState() {
-    super.initState();
-    final service = Provider.of<FirebaseService>(context, listen: false);
-    _bulletinController = TextEditingController(text: service.bulletinText);
-  }
-
-  @override
-  void dispose() {
-    _bulletinController.dispose();
-    super.dispose();
-  }
-
   int _selectedFilterIndex = 0; // 0 = Pending, 1 = All Ushers, 2 = Denied
   bool _isRefreshing = false;
 
@@ -46,10 +32,19 @@ class _AdminApprovalViewState extends State<AdminApprovalView> {
     }
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: const Text("Admin Portal"),
+        title: const Text("Admin/Lead Portal"),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.megaphone),
+            tooltip: "Announcements",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnnouncementsView()),
+              );
+            },
+          ),
           IconButton(
             icon: _isRefreshing
                 ? const SizedBox(
@@ -87,51 +82,6 @@ class _AdminApprovalViewState extends State<AdminApprovalView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bulletin Manager Section
-                Text(
-                  "Leadership Bulletin Broadcast",
-                  style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimaryColor,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                DribbbleGlassContainer(
-                  borderRadius: 24,
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _bulletinController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: "Enter global announcement text for all ushers...",
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: DribbbleGlowButton(
-                          label: "Publish Bulletin",
-                          icon: LucideIcons.send,
-                          height: 46,
-                          gradient: context.activeGradient,
-                          onPressed: () {
-                            firebaseService.updateBulletin(_bulletinController.text.trim());
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Leadership bulletin updated!")),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
                 // Approvals Header & Segmented Tabs
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

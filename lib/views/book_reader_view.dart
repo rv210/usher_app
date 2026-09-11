@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/training_module.dart';
 
 enum ReadingTheme { parchment, warmSepia, cleanWhite, dark, oledBlack }
 
@@ -526,17 +527,235 @@ class _BookReaderViewState extends State<BookReaderView> {
                 : null,
           ),
           child: Center(
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: textC,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: textC,
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  void _showPairedModuleSheet([int? chapterIndex]) {
+    final targetChapterIdx = chapterIndex ?? _currentChapterIndex;
+    final pairedModules = getModulesForChapter(targetChapterIdx);
+    final chTitle = targetChapterIdx < _chapters.length
+        ? (_chapters[targetChapterIdx] as Map<String, dynamic>)['title'] ?? 'Chapter ${targetChapterIdx + 1}'
+        : 'Chapter ${targetChapterIdx + 1}';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _getSurfaceColor(),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollCtl) {
+            return Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: _getSecondaryTextColor().withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          LucideIcons.graduationCap,
+                          color: Theme.of(context).primaryColor,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Paired Training SOP",
+                              style: GoogleFonts.cinzel(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _getTextColor(),
+                              ),
+                            ),
+                            Text(
+                              "Paired with $chTitle",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: _getSecondaryTextColor(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(LucideIcons.x, color: _getTextColor(), size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: _getAccentBorderColor()),
+                Expanded(
+                  child: pairedModules.isEmpty
+                      ? Center(
+                          child: Text(
+                            "No training module directly linked to this chapter.",
+                            style: GoogleFonts.inter(color: _getSecondaryTextColor()),
+                          ),
+                        )
+                      : ListView.separated(
+                          controller: scrollCtl,
+                          padding: const EdgeInsets.all(20),
+                          itemCount: pairedModules.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          itemBuilder: (context, mIdx) {
+                            final m = pairedModules[mIdx];
+                            return Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: _getBgColor(),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: _getAccentBorderColor()),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          "SOP MODULE",
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(context).primaryColor,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          m.keyScripture,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontStyle: FontStyle.italic,
+                                            color: _getSecondaryTextColor(),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    m.title,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: _getTextColor(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    m.summary,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      color: _getSecondaryTextColor(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          LucideIcons.sparkles,
+                                          size: 16,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            m.practicalTakeaway,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: _getTextColor(),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  SelectableText(
+                                    m.content,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      height: 1.55,
+                                      color: _getTextColor(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -557,12 +776,15 @@ class _BookReaderViewState extends State<BookReaderView> {
               final qLower = query.toLowerCase();
               for (int cIdx = 0; cIdx < _chapters.length; cIdx++) {
                 final ch = _chapters[cIdx] as Map<String, dynamic>;
-                final full = (ch['full_text'] as String? ?? '').toLowerCase();
-                if (full.contains(qLower)) {
-                  final idx = full.indexOf(qLower);
+                final paragraphs = ch['paragraphs'] as List<dynamic>? ?? [];
+                final full = ch['full_text'] as String? ??
+                    paragraphs.map((p) => "${p['text'] ?? ''} ${p['reference'] ?? ''}").join(' ');
+                final fullLower = full.toLowerCase();
+                if (fullLower.contains(qLower)) {
+                  final idx = fullLower.indexOf(qLower);
                   final start = (idx - 40).clamp(0, full.length);
                   final end = (idx + qLower.length + 60).clamp(0, full.length);
-                  final snippet = (ch['full_text'] as String).substring(start, end).replaceAll('\n', ' ');
+                  final snippet = full.substring(start, end).replaceAll('\n', ' ');
 
                   results.add({
                     'chapter_index': cIdx,
@@ -670,101 +892,47 @@ class _BookReaderViewState extends State<BookReaderView> {
     final leadInWords = words.take(leadInCount).join(' ').toUpperCase();
     final afterLeadIn = words.skip(leadInCount).join(' ');
 
-    if (words.length <= 10) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(right: 8, top: 0),
-              child: Text(
-                firstChar,
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: (_fontSize * 3.4).clamp(52.0, 78.0),
-                  fontWeight: FontWeight.w800,
-                  height: 0.84,
-                  color: textColor,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  style: bodyStyle,
-                  children: [
-                    TextSpan(
-                      text: "$leadInWords ",
-                      style: bodyStyle.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        fontSize: _fontSize * 0.94,
-                      ),
-                    ),
-                    TextSpan(text: afterLeadIn),
-                  ],
-                ),
-                textAlign: TextAlign.justify,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final sideWords = words.take(9).toList();
-    final bottomWords = words.skip(9).toList();
-
-    final sideLeadIn = sideWords.take(leadInCount).join(' ').toUpperCase();
-    final sideRest = sideWords.skip(leadInCount).join(' ');
-    final bottomText = bottomWords.join(' ');
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(right: 8, top: 0),
+      child: SelectableText.rich(
+        TextSpan(
+          style: bodyStyle,
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Container(
+                margin: const EdgeInsets.only(right: 8, bottom: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                  ),
+                ),
                 child: Text(
                   firstChar,
                   style: GoogleFonts.playfairDisplay(
-                    fontSize: (_fontSize * 3.4).clamp(52.0, 78.0),
-                    fontWeight: FontWeight.w800,
-                    height: 0.84,
-                    color: textColor,
+                    fontSize: (_fontSize * 1.8).clamp(28.0, 42.0),
+                    fontWeight: FontWeight.w900,
+                    color: Theme.of(context).primaryColor,
+                    height: 1.0,
                   ),
                 ),
               ),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    style: bodyStyle,
-                    children: [
-                      TextSpan(
-                        text: "$sideLeadIn ",
-                        style: bodyStyle.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          fontSize: _fontSize * 0.94,
-                        ),
-                      ),
-                      TextSpan(text: sideRest),
-                    ],
-                  ),
-                  textAlign: TextAlign.justify,
-                ),
+            ),
+            TextSpan(
+              text: "$leadInWords ",
+              style: bodyStyle.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                fontSize: _fontSize * 0.95,
               ),
-            ],
-          ),
-          if (bottomText.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            _buildRichSelectableText(bottomText, bodyStyle),
+            ),
+            TextSpan(text: afterLeadIn),
           ],
-        ],
+        ),
+        textAlign: TextAlign.start,
       ),
     );
   }
@@ -811,47 +979,57 @@ class _BookReaderViewState extends State<BookReaderView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Header Pill: HOLY SCRIPTURE + Reference Badge
+                // Top Header Pill: SCRIPTURE + Reference Badge
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        LucideIcons.bookOpenCheck,
-                        size: 14,
-                        color: primary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "HOLY SCRIPTURE",
-                      style: GoogleFonts.cinzel(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.6,
-                        color: primary,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (reference.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: primary.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          reference,
-                          style: GoogleFonts.cinzel(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.8,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: primary.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            LucideIcons.bookOpenCheck,
+                            size: 14,
                             color: primary,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "SCRIPTURE",
+                          style: GoogleFonts.cinzel(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (reference.isNotEmpty)
+                      Flexible(
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            reference,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.cinzel(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.6,
+                              color: primary,
+                            ),
                           ),
                         ),
                       ),
@@ -875,7 +1053,7 @@ class _BookReaderViewState extends State<BookReaderView> {
                       ),
                     ],
                   ),
-                  textAlign: TextAlign.justify,
+                  textAlign: TextAlign.start,
                 ),
 
                 if (reference.isNotEmpty) ...[
@@ -912,7 +1090,7 @@ class _BookReaderViewState extends State<BookReaderView> {
       return SelectableText(
         text,
         style: baseStyle,
-        textAlign: TextAlign.justify,
+        textAlign: TextAlign.start,
       );
     }
 
@@ -948,7 +1126,7 @@ class _BookReaderViewState extends State<BookReaderView> {
 
     return SelectableText.rich(
       TextSpan(children: spans),
-      textAlign: TextAlign.justify,
+      textAlign: TextAlign.start,
     );
   }
 
@@ -988,46 +1166,67 @@ class _BookReaderViewState extends State<BookReaderView> {
               backgroundColor: _getSurfaceColor(),
               elevation: 0,
               centerTitle: false,
+              titleSpacing: 0,
               leading: IconButton(
                 icon: Icon(LucideIcons.arrowLeft, color: _getTextColor()),
                 onPressed: () => Navigator.pop(context),
               ),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    "Ministry Handbook",
-                    style: GoogleFonts.cinzel(fontSize: 15, fontWeight: FontWeight.bold, color: _getTextColor()),
+                    "Handbook",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.cinzel(fontSize: 14.5, fontWeight: FontWeight.bold, color: _getTextColor()),
                   ),
                   Text(
-                    "Chapter ${_currentChapterIndex + 1} of ${_chapters.length} • ${currentChapter['read_time_minutes']} min read",
-                    style: GoogleFonts.inter(fontSize: 11, color: _getSecondaryTextColor()),
+                    "Ch. ${_currentChapterIndex + 1} of ${_chapters.length} • ${currentChapter['read_time_minutes']}m",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(fontSize: 10.5, color: _getSecondaryTextColor()),
                   ),
                 ],
               ),
               actions: [
                 IconButton(
+                  tooltip: "Paired Training Module & SOP",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(LucideIcons.graduationCap, color: Theme.of(context).primaryColor, size: 19),
+                  onPressed: () => _showPairedModuleSheet(),
+                ),
+                IconButton(
                   tooltip: "Search in Handbook",
-                  icon: Icon(LucideIcons.search, color: _getTextColor(), size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(LucideIcons.search, color: _getTextColor(), size: 18),
                   onPressed: _showSearchModal,
                 ),
                 IconButton(
                   tooltip: isBookmarked ? "Remove Bookmark" : "Bookmark Chapter",
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   icon: Icon(
                     isBookmarked ? LucideIcons.bookmarkCheck : LucideIcons.bookmark,
                     color: isBookmarked ? Theme.of(context).primaryColor : _getTextColor(),
-                    size: 20,
+                    size: 18,
                   ),
                   onPressed: _toggleBookmark,
                 ),
                 IconButton(
                   tooltip: "Table of Contents",
-                  icon: Icon(LucideIcons.list, color: _getTextColor(), size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(LucideIcons.list, color: _getTextColor(), size: 18),
                   onPressed: _showTableOfContents,
                 ),
                 IconButton(
                   tooltip: "Text & Theme",
-                  icon: Icon(LucideIcons.settings2, color: _getTextColor(), size: 20),
+                  padding: const EdgeInsets.only(right: 6),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(LucideIcons.settings2, color: _getTextColor(), size: 18),
                   onPressed: _showReadingSettings,
                 ),
               ],
@@ -1076,26 +1275,26 @@ class _BookReaderViewState extends State<BookReaderView> {
                                 ),
                                 const SizedBox(height: 14),
 
-                                // Center Ornamental Divider Vignette (—— 🪞 ——)
+                                // Center Ornamental Divider Vignette
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     SizedBox(
-                                      width: 75,
+                                      width: 50,
                                       child: Divider(
                                         color: _getTextColor().withValues(alpha: 0.35),
                                         thickness: 1.1,
                                       ),
                                     ),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
                                       child: _VignetteEmblem(
                                         color: _getTextColor().withValues(alpha: 0.75),
-                                        size: 26,
+                                        size: 22,
                                       ),
                                     ),
                                     SizedBox(
-                                      width: 75,
+                                      width: 50,
                                       child: Divider(
                                         color: _getTextColor().withValues(alpha: 0.35),
                                         thickness: 1.1,
@@ -1129,6 +1328,51 @@ class _BookReaderViewState extends State<BookReaderView> {
                                     ),
                                   ),
                                 ],
+                                Builder(
+                                  builder: (context) {
+                                    final paired = getModulesForChapter(_currentChapterIndex);
+                                    if (paired.isEmpty) return const SizedBox.shrink();
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 14),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(20),
+                                        onTap: () => _showPairedModuleSheet(),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                                            ),
+                                          ),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  LucideIcons.graduationCap,
+                                                  size: 15,
+                                                  color: Theme.of(context).primaryColor,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  "Paired with ${paired.length == 1 ? paired.first.title.split(':').first : '${paired.length} SOP Modules'} • Tap for SOP",
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Theme.of(context).primaryColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           );
@@ -1151,13 +1395,86 @@ class _BookReaderViewState extends State<BookReaderView> {
                                     children: [
                                       Icon(LucideIcons.checkCircle2, color: Theme.of(context).primaryColor, size: 20),
                                       const SizedBox(width: 10),
-                                      Text(
-                                        "You've completed Chapter ${_currentChapterIndex + 1}",
-                                        style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 14, color: _getTextColor()),
+                                      Expanded(
+                                        child: Text(
+                                          "You've completed Chapter ${_currentChapterIndex + 1}",
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 14, color: _getTextColor()),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 18),
+                                  const SizedBox(height: 14),
+                                  Builder(
+                                    builder: (context) {
+                                      final paired = getModulesForChapter(_currentChapterIndex);
+                                      if (paired.isEmpty) return const SizedBox.shrink();
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 14),
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).primaryColor.withValues(alpha: 0.18),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                LucideIcons.graduationCap,
+                                                color: Theme.of(context).primaryColor,
+                                                size: 18,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    "Paired Training SOP",
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 13.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: _getTextColor(),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    "Review checklists & operational procedures",
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 11.5,
+                                                      color: _getSecondaryTextColor(),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Theme.of(context).primaryColor,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                              ),
+                                              onPressed: () => _showPairedModuleSheet(),
+                                              child: Text(
+                                                "View SOP",
+                                                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   Row(
                                     children: [
                                       if (hasPrev)
@@ -1166,11 +1483,14 @@ class _BookReaderViewState extends State<BookReaderView> {
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: _getTextColor(),
                                               side: BorderSide(color: _getAccentBorderColor()),
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
+                                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                             ),
                                             icon: const Icon(LucideIcons.chevronLeft, size: 16),
-                                            label: Text("Previous", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            label: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text("Previous", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            ),
                                             onPressed: () => _goToChapter(_currentChapterIndex - 1),
                                           ),
                                         )
@@ -1183,11 +1503,14 @@ class _BookReaderViewState extends State<BookReaderView> {
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: Theme.of(context).primaryColor,
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
+                                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                             ),
                                             icon: const Icon(LucideIcons.chevronRight, size: 16),
-                                            label: Text("Next Chapter", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            label: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text("Next Chapter", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold, fontSize: 12)),
+                                            ),
                                             onPressed: () => _goToChapter(_currentChapterIndex + 1),
                                           ),
                                         ),

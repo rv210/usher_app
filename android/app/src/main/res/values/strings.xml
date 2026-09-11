@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Guardians Of The Gate</string>
+    <string name="widget_duty_title">Upcoming Duty</string>
+    <string name="widget_duty_description">Displays your next scheduled service station, date, and duty assignment.</string>
+    <string name="widget_tally_title">Live Headcount</string>
+    <string name="widget_tally_description">Displays the active congregation attendance tally with quick count tap.</string>
+    <string name="widget_scripture_title">Scripture &amp; Wisdom</string>
+    <string name="widget_scripture_description">Displays the daily ministry scripture anchor and quick link to the Handbook.</string>
+</resources>

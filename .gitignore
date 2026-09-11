@@ -50,3 +50,8 @@ app.*.map.json
 .env.*
 !.env.example
 
+# Showcase Artifacts
+app_store_showcase.html
+login_landing.png
+phone_*.png
+

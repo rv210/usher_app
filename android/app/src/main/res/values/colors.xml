@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_bg_dark">#090A0D</color>
+    <color name="widget_card_surface">#161C27</color>
+    <color name="widget_card_surface_elevated">#1E2636</color>
+    <color name="widget_gold_primary">#D4AF37</color>
+    <color name="widget_gold_dark">#9A7B1C</color>
+    <color name="widget_text_primary">#F8FAFC</color>
+    <color name="widget_text_secondary">#94A3B8</color>
+    <color name="widget_text_muted">#64748B</color>
+    <color name="widget_border_subtle">#334155</color>
+    <color name="widget_accent_green">#10B981</color>
+    <color name="widget_accent_blue">#38BDF8</color>
+    <color name="notification_color">#D4AF37</color>
+</resources>

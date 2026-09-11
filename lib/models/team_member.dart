@@ -11,6 +11,7 @@ class TeamMember {
   final String? fcmToken;
   final bool twoFactorEnabled;
   final String? twoFactorPhone;
+  final String? photoUrl;
 
   TeamMember({
     required this.id,
@@ -25,6 +26,7 @@ class TeamMember {
     this.fcmToken,
     this.twoFactorEnabled = false,
     this.twoFactorPhone,
+    this.photoUrl,
   });
 
   factory TeamMember.fromMap(Map<String, dynamic> data, String id) {
@@ -116,6 +118,7 @@ class TeamMember {
       fcmToken: parseStr(data['fcmToken']),
       twoFactorEnabled: twoFactorEnabled,
       twoFactorPhone: twoFactorPhone,
+      photoUrl: parseStr(data['photoUrl'] ?? data['photoURL'] ?? data['avatarUrl'] ?? data['profilePicture'] ?? data['avatar']),
     );
   }
 
@@ -133,7 +136,40 @@ class TeamMember {
       if (fcmToken != null) 'fcmToken': fcmToken,
       'twoFactorEnabled': twoFactorEnabled,
       if (twoFactorPhone != null) 'twoFactorPhone': twoFactorPhone,
+      if (photoUrl != null) 'photoUrl': photoUrl,
     };
+  }
+
+  TeamMember copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? role,
+    bool? approved,
+    bool? denied,
+    String? createdAt,
+    String? linkedTo,
+    String? fcmToken,
+    bool? twoFactorEnabled,
+    String? twoFactorPhone,
+    String? photoUrl,
+  }) {
+    return TeamMember(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      approved: approved ?? this.approved,
+      denied: denied ?? this.denied,
+      createdAt: createdAt ?? this.createdAt,
+      linkedTo: linkedTo ?? this.linkedTo,
+      fcmToken: fcmToken ?? this.fcmToken,
+      twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
+      twoFactorPhone: twoFactorPhone ?? this.twoFactorPhone,
+      photoUrl: photoUrl ?? this.photoUrl,
+    );
   }
 
   bool get isAdmin {
@@ -155,7 +191,7 @@ class TeamMember {
 
   bool get isLead => (role?.toLowerCase() == 'lead' || isAdmin);
 
-  String get displayRole => isAdmin ? 'Admin' : (role ?? 'Usher');
+  String get displayRole => isAdmin ? 'Admin/Lead' : (role ?? 'Usher');
 
   @override
   bool operator ==(Object other) =>

@@ -9,7 +9,14 @@ import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
 
 class CalendarView extends StatefulWidget {
-  const CalendarView({super.key});
+  final GlobalKey? sundayStripKey;
+  final GlobalKey? addDutyKey;
+
+  const CalendarView({
+    super.key,
+    this.sundayStripKey,
+    this.addDutyKey,
+  });
 
   @override
   State<CalendarView> createState() => _CalendarViewState();
@@ -24,12 +31,12 @@ class _CalendarViewState extends State<CalendarView> {
 
   List<DateTime> _getSundaysForMonth(DateTime monthDate) {
     final sundays = <DateTime>[];
-    final firstDay = DateTime(monthDate.year, monthDate.month, 1);
-    final lastDay = DateTime(monthDate.year, monthDate.month + 1, 0);
+    final daysInMonth = DateTime(monthDate.year, monthDate.month + 1, 0).day;
 
-    for (var day = firstDay; day.isBefore(lastDay.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
-      if (day.weekday == DateTime.sunday) {
-        sundays.add(day);
+    for (int day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(monthDate.year, monthDate.month, day);
+      if (date.weekday == DateTime.sunday) {
+        sundays.add(date);
       }
     }
     return sundays;
@@ -95,6 +102,7 @@ class _CalendarViewState extends State<CalendarView> {
               },
             ),
           IconButton(
+            key: widget.addDutyKey,
             icon: const Icon(LucideIcons.plus),
             tooltip: "Assign Duty Station",
             onPressed: () {
@@ -112,55 +120,64 @@ class _CalendarViewState extends State<CalendarView> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: DribbbleGlassContainer(
+                key: widget.sundayStripKey,
                 borderRadius: 22,
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
                     // Calendar Month Header
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(LucideIcons.calendarDays, color: AppColors.accent, size: 18),
                               ),
-                              child: const Icon(LucideIcons.calendarDays, color: AppColors.accent, size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              DateFormat('MMMM yyyy').format(_focusedMonth),
-                              style: GoogleFonts.outfit(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  DateFormat('MMMM yyyy').format(_focusedMonth),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 6),
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             if (_selectedSunday != null)
                               Padding(
-                                padding: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.only(right: 6),
                                 child: InkWell(
                                   onTap: () => setState(() => _selectedSunday = null),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: AppColors.primary.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          "All Sundays",
+                                          "All",
                                           style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
                                         ),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 3),
                                         const Icon(LucideIcons.x, size: 12, color: AppColors.primary),
                                       ],
                                     ),
@@ -178,7 +195,7 @@ class _CalendarViewState extends State<CalendarView> {
                                 });
                               },
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 4),
                             IconButton(
                               constraints: const BoxConstraints(),
                               padding: const EdgeInsets.all(4),
@@ -653,13 +670,16 @@ class _CalendarViewState extends State<CalendarView> {
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
 
-    final seenIds = <String>{};
-    final roster = <TeamMember>[];
-    for (final m in rawRoster) {
-      if (seenIds.add(m.id)) {
-        roster.add(m);
-      }
-    }
+    final roster = FirebaseService.deduplicateMemberList(
+      rawRoster,
+      currentUid: firebaseService.currentUser?.uid,
+    );
+    roster.sort((a, b) {
+      final aPriority = a.isAdmin ? 0 : (a.isLead ? 1 : 2);
+      final bPriority = b.isAdmin ? 0 : (b.isLead ? 1 : 2);
+      if (aPriority != bPriority) return aPriority.compareTo(bPriority);
+      return (a.name ?? '').toLowerCase().compareTo((b.name ?? '').toLowerCase());
+    });
 
     TeamMember? selectedMember = roster.isNotEmpty ? roster.first : null;
     final customNameController = TextEditingController();
@@ -795,7 +815,7 @@ class _CalendarViewState extends State<CalendarView> {
   String _getNextSundayDateString() {
     final now = DateTime.now();
     final daysUntilSunday = (DateTime.sunday - now.weekday + 7) % 7;
-    final sunday = daysUntilSunday == 0 ? now : now.add(Duration(days: daysUntilSunday));
+    final sunday = daysUntilSunday == 0 ? now : DateTime(now.year, now.month, now.day + daysUntilSunday);
     return "${sunday.year}-${sunday.month.toString().padLeft(2, '0')}-${sunday.day.toString().padLeft(2, '0')}";
   }
 
@@ -805,16 +825,23 @@ class _CalendarViewState extends State<CalendarView> {
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
 
-    // Deduplicate roster members by ID
-    final seenIds = <String>{};
-    final roster = <TeamMember>[];
-    for (final m in rawRoster) {
-      if (seenIds.add(m.id)) {
-        roster.add(m);
-      }
-    }
+    final roster = FirebaseService.deduplicateMemberList(
+      rawRoster,
+      currentUid: firebaseService.currentUser?.uid,
+    );
+    roster.sort((a, b) {
+      final aPriority = a.isAdmin ? 0 : (a.isLead ? 1 : 2);
+      final bPriority = b.isAdmin ? 0 : (b.isLead ? 1 : 2);
+      if (aPriority != bPriority) return aPriority.compareTo(bPriority);
+      return (a.name ?? '').toLowerCase().compareTo((b.name ?? '').toLowerCase());
+    });
 
-    TeamMember? selectedMember = initialMember ?? (roster.isNotEmpty ? roster.first : null);
+    TeamMember? selectedMember = initialMember != null
+        ? roster.firstWhere(
+            (m) => m.id == initialMember.id || FirebaseService.isSameMember(m, initialMember),
+            orElse: () => roster.isNotEmpty ? roster.first : initialMember,
+          )
+        : (roster.isNotEmpty ? roster.first : null);
     final customNameController = TextEditingController();
     final customStationController = TextEditingController();
     final customEventController = TextEditingController();
@@ -1078,7 +1105,7 @@ class _CalendarViewState extends State<CalendarView> {
                         children: List.generate(4, (index) {
                           final now = DateTime.now();
                           final daysUntilNextSunday = (DateTime.sunday - now.weekday + 7) % 7;
-                          final nextSunday = now.add(Duration(days: daysUntilNextSunday + (index * 7)));
+                          final nextSunday = DateTime(now.year, now.month, now.day + daysUntilNextSunday + (index * 7));
                           final formatted = DateFormat('yyyy-MM-dd').format(nextSunday);
                           final label = DateFormat('MMM d').format(nextSunday);
 
