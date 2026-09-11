@@ -15,6 +15,7 @@ import 'attendance_view.dart';
 import 'announcements_view.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/profile_background_picker.dart';
+import 'comms_view.dart';
 
 class BibleQuote {
   final String reference;
@@ -247,274 +248,359 @@ class _DashboardViewState extends State<DashboardView> {
 
   Widget _buildEditorialScripture(BuildContext context, bool isDark) {
     final quote = usherBibleQuotes[_todayQuoteIndex];
-    final primaryColor = Theme.of(context).primaryColor;
+
+    // Sacred gold palette — independent of app theme
+    const goldDeep    = Color(0xFFB8860B);  // dark goldenrod
+    const goldBright  = Color(0xFFD4AF37);  // classic gold
+    const goldLight   = Color(0xFFFFD700);  // pure gold highlight
+    const goldGlow    = Color(0xFFF5C842);  // warm glow
+    const parchmentDk = Color(0xFF1A1508);  // dark parchment bg
+    const parchmentMd = Color(0xFF231C0A);  // mid dark parchment
+    const parchmentLt = Color(0xFFFBF3DC);  // light parchment
+    const inkDark     = Color(0xFF1A120A);  // dark ink text
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
+      // Outer gilded frame
       decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1C1814),
-                  const Color(0xFF12141F),
-                ]
-              : [
-                  const Color(0xFFFFFDF8),
-                  const Color(0xFFF9F5EA),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: primaryColor.withValues(alpha: isDark ? 0.35 : 0.40),
-          width: 1.2,
+          colors: [goldBright, goldDeep, goldGlow, goldDeep, goldBright],
+          stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withValues(alpha: isDark ? 0.16 : 0.08),
-            blurRadius: 16,
+            color: goldBright.withValues(alpha: 0.55),
+            blurRadius: 22,
+            spreadRadius: 1,
             offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          children: [
-            // Holy Cross Watermark Silhouette
-            Positioned(
-              right: -12,
-              bottom: -16,
-              child: IgnorePointer(
-                child: Icon(
-                  LucideIcons.cross,
-                  size: 110,
-                  color: primaryColor.withValues(alpha: isDark ? 0.055 : 0.045),
-                ),
+      child: Padding(
+        // Gilded border thickness
+        padding: const EdgeInsets.all(3),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(17.5),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(17.5),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: isDark
+                    ? [parchmentDk, parchmentMd, parchmentDk]
+                    : [const Color(0xFFFEF9ED), parchmentLt, const Color(0xFFFDF4D8)],
               ),
             ),
+            child: Stack(
+              children: [
+                // Large Sacred Cross Watermark
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: isDark ? 0.07 : 0.05,
+                      child: Center(
+                        child: Icon(
+                          LucideIcons.cross,
+                          size: 200,
+                          color: goldDeep,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
-            // Card Content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top Sacred Header
-                  Row(
+                // Corner accent flourishes (top-left)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IgnorePointer(
+                    child: Icon(
+                      LucideIcons.sparkles,
+                      size: 14,
+                      color: goldBright.withValues(alpha: isDark ? 0.50 : 0.40),
+                    ),
+                  ),
+                ),
+                // Corner accent flourishes (top-right)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IgnorePointer(
+                    child: Icon(
+                      LucideIcons.sparkles,
+                      size: 14,
+                      color: goldBright.withValues(alpha: isDark ? 0.50 : 0.40),
+                    ),
+                  ),
+                ),
+
+                // Card Content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // Sacred Cross Icon Header
                       Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(9),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: primaryColor.withValues(alpha: isDark ? 0.22 : 0.12),
-                          border: Border.all(
-                            color: primaryColor.withValues(alpha: 0.35),
-                            width: 1,
+                          gradient: const LinearGradient(
+                            colors: [goldLight, goldBright, goldDeep],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: goldBright.withValues(alpha: 0.6),
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
-                        child: Icon(LucideIcons.cross, size: 13, color: primaryColor),
+                        child: Icon(
+                          LucideIcons.cross,
+                          size: 18,
+                          color: isDark ? parchmentDk : Colors.white,
+                        ),
                       ),
-                      const SizedBox(width: 8),
+
+                      const SizedBox(height: 10),
+
+                      // "DAILY SCRIPTURE" Title
                       Text(
                         "DAILY SCRIPTURE",
                         style: GoogleFonts.cinzel(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4,
-                          color: primaryColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3.0,
+                          color: goldDeep,
+                          shadows: [
+                            Shadow(
+                              color: goldBright.withValues(alpha: 0.6),
+                              blurRadius: 6,
+                            ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
+
+                      const SizedBox(height: 4),
+
+                      // Category badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                         decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: isDark ? 0.18 : 0.08),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: primaryColor.withValues(alpha: 0.25),
-                            width: 0.8,
+                          gradient: const LinearGradient(
+                            colors: [goldDeep, goldBright],
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.sparkles, size: 10, color: primaryColor),
+                            Icon(
+                              LucideIcons.star,
+                              size: 9,
+                              color: isDark ? parchmentDk : Colors.white,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               quote.category.toUpperCase(),
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
+                              style: GoogleFonts.cinzel(
+                                fontSize: 9,
                                 fontWeight: FontWeight.w700,
-                                letterSpacing: 0.6,
-                                color: primaryColor,
+                                letterSpacing: 1.2,
+                                color: isDark ? parchmentDk : Colors.white,
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              LucideIcons.star,
+                              size: 9,
+                              color: isDark ? parchmentDk : Colors.white,
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
 
-                  // Luminous Gilded Filigree Divider
-                  Container(
-                    height: 1,
-                    margin: const EdgeInsets.symmetric(vertical: 11),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          primaryColor.withValues(alpha: isDark ? 0.40 : 0.30),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
+                      const SizedBox(height: 14),
 
-                  // Scripture Verse Text
-                  Text(
-                    "“${quote.text}”",
-                    style: GoogleFonts.merriweather(
-                      fontSize: 14.5,
-                      fontStyle: FontStyle.italic,
-                      height: 1.55,
-                      fontWeight: FontWeight.w400,
-                      color: isDark ? const Color(0xFFF3EFE6) : const Color(0xFF25201A),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Bottom Reference and Consecration Action Bar
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          "— ${quote.reference}",
-                          style: GoogleFonts.outfit(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.3,
-                            color: primaryColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      // Gilded ornate divider
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Colors.transparent, goldGlow, goldLight, goldGlow, Colors.transparent],
+                        ).createShader(bounds),
+                        child: Container(
+                          height: 1.5,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 8),
 
-                      // Copy Button
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Clipboard.setData(ClipboardData(text: "\"${quote.text}\" — ${quote.reference}"));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Row(
+                      const SizedBox(height: 14),
+
+                      // Scripture Text
+                      Text(
+                        "\u201c${quote.text}\u201d",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.merriweather(
+                          fontSize: 14,
+                          fontStyle: FontStyle.italic,
+                          height: 1.65,
+                          fontWeight: FontWeight.w400,
+                          color: isDark ? const Color(0xFFF5EDD6) : inkDark,
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Gilded ornate divider (bottom)
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [Colors.transparent, goldGlow, goldLight, goldGlow, Colors.transparent],
+                        ).createShader(bounds),
+                        child: Container(
+                          height: 1.5,
+                          color: Colors.white,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Reference
+                      Text(
+                        "— ${quote.reference}",
+                        style: GoogleFonts.cinzel(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: goldDeep,
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Action Buttons Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Copy Button
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              Clipboard.setData(ClipboardData(text: "\"${quote.text}\" — ${quote.reference}"));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Row(
+                                    children: [
+                                      Icon(LucideIcons.checkCheck, color: Color(0xFF10B981), size: 18),
+                                      SizedBox(width: 8),
+                                      Text("Scripture copied to clipboard!"),
+                                    ],
+                                  ),
+                                  backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: goldBright, width: 1.2),
+                                color: goldBright.withValues(alpha: isDark ? 0.12 : 0.08),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(LucideIcons.checkCheck, color: Color(0xFF10B981), size: 18),
-                                  SizedBox(width: 8),
-                                  Text("Daily Scripture copied to clipboard!"),
+                                  Icon(LucideIcons.copy, size: 13, color: goldDeep),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    "Copy",
+                                    style: GoogleFonts.cinzel(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: goldDeep,
+                                    ),
+                                  ),
                                 ],
                               ),
-                              backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: primaryColor.withValues(alpha: 0.25),
-                              width: 0.8,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(LucideIcons.copy, size: 11.5, color: primaryColor),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Copy",
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: primaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
 
-                      // Share to Comms Button
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () async {
-                          HapticFeedback.mediumImpact();
-                          final commsText = "✝️ [DAILY SCRIPTURE • ${quote.category.toUpperCase()}]\n\"${quote.text}\"\n— ${quote.reference}";
-                          await Provider.of<FirebaseService>(context, listen: false).postCommsMessage(commsText);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const CommsView()),
-                            );
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                primaryColor,
-                                primaryColor.withValues(alpha: 0.85),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: primaryColor.withValues(alpha: 0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(LucideIcons.messageSquareShare, size: 12, color: Colors.white),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Comms",
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                          const SizedBox(width: 10),
+
+                          // Share to Comms Button
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () async {
+                              HapticFeedback.mediumImpact();
+                              final commsText = "✝️ [DAILY SCRIPTURE • ${quote.category.toUpperCase()}]\n\"${quote.text}\"\n— ${quote.reference}";
+                              await Provider.of<FirebaseService>(context, listen: false).postCommsMessage(commsText);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const CommsView()),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                gradient: const LinearGradient(
+                                  colors: [goldDeep, goldBright, goldGlow],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: goldBright.withValues(alpha: 0.45),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                            ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.messageSquareShare,
+                                    size: 13,
+                                    color: isDark ? parchmentDk : Colors.white,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    "Share to Comms",
+                                    style: GoogleFonts.cinzel(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? parchmentDk : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
