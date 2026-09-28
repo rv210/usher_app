@@ -9,7 +9,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/firebase_options.dart';
 import 'services/firebase_service.dart';
-import 'services/bubble_service.dart';
 import 'theme/app_theme.dart';
 import 'views/login_view.dart';
 import 'views/pending_denied_view.dart';
@@ -21,10 +20,10 @@ import 'views/comms_view.dart';
 import 'views/admin_approval_view.dart';
 import 'views/settings_view.dart';
 import 'views/splash_view.dart';
-import 'views/app_tutorial_view.dart';
 import 'views/app_coachmark_tour.dart';
 import 'views/ushering_training_view.dart';
 import 'views/wear_tally_view.dart';
+import 'services/bubble_service.dart';
 import 'services/app_widget_service.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -43,32 +42,27 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint("System Push Notification Received: ${message.notification?.title ?? message.data['title']}");
 
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    final title = message.data['title'];
-    final body = message.data['body'];
+    final title = message.data['title'] ?? message.notification?.title;
+    final body = message.data['body'] ?? message.notification?.body;
+    final type = message.data['type'] ?? '';
     if (title != null) {
       try {
-        final isComms = (message.data['type'] == 'comms') ||
-            title.toLowerCase().contains('comms') ||
-            title.toLowerCase().contains('chat') ||
-            title.toLowerCase().contains('message');
-
-        if (isComms) {
-          final sender = message.data['senderName'] ?? title;
-          final text = message.data['message'] ?? body ?? '';
-          final senderId = message.data['senderId'] ?? 'team_lead';
-          final bubbled = await BubbleService.showBubbleNotification(
-            senderName: sender,
-            message: text,
-            senderId: senderId,
-            shortcutId: 'comms_$senderId',
+        if (type == 'comms') {
+          // Trigger Android Conversation Bubble Notification for Comms messages
+          final handled = await BubbleService.showBubbleNotification(
+            senderName: message.data['senderName'] ?? title,
+            message: body ?? '',
+            senderId: message.data['senderId'] ?? 'team_member',
+            shortcutId: message.data['shortcutId'] ?? 'comms_conversation',
+            autoExpand: false,
           );
-          if (bubbled) return;
+          if (handled) return;
         }
 
         final localNotifications = FlutterLocalNotificationsPlugin();
         await localNotifications.initialize(
           const InitializationSettings(
-            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+            android: AndroidInitializationSettings('@drawable/ic_stat_notification'),
           ),
         );
         final androidPlugin = localNotifications
@@ -76,7 +70,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         await androidPlugin?.createNotificationChannel(
           const AndroidNotificationChannel(
             'high_importance_channel',
-            'High Importance Notifications',
+            'Guardians Notifications',
             description: 'Used for comms, schedule, and deployment alerts',
             importance: Importance.max,
             playSound: true,
@@ -89,16 +83,20 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           notificationId,
           title,
           body,
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
               'high_importance_channel',
-              'High Importance Notifications',
+              'Guardians Notifications',
               channelDescription: 'Used for comms, schedule, and deployment alerts',
               importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: '@drawable/ic_stat_notification',
               enableVibration: true,
               playSound: true,
+              styleInformation: BigTextStyleInformation(
+                body ?? '',
+                contentTitle: title,
+              ),
             ),
           ),
         );
@@ -156,6 +154,19 @@ class UsherApp extends StatelessWidget {
         theme: AppTheme.getTheme(Brightness.light, firebaseService.activeStyleTheme),
         darkTheme: AppTheme.getTheme(Brightness.dark, firebaseService.activeStyleTheme),
         themeMode: firebaseService.themeMode,
+        builder: (context, child) {
+          final mediaQuery = MediaQuery.of(context);
+          // Scale gracefully with user's accessibility font settings while clamping
+          // within safe layout bounds so Android large font/display settings don't overflow the UI
+          final clampedTextScaler = mediaQuery.textScaler.clamp(
+            minScaleFactor: 0.85,
+            maxScaleFactor: 1.18,
+          );
+          return MediaQuery(
+            data: mediaQuery.copyWith(textScaler: clampedTextScaler),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         initialRoute: '/',
         routes: {
           '/': (context) => const MainShell(),
@@ -476,7 +487,7 @@ class _MainShellState extends State<MainShell> {
       }
     });
 
-    // Handle deep linking from Android widgets
+    // Handle deep linking from Android widgets and notification intents
     AppWidgetService.getInitialWidgetRoute().then((data) {
       if (data != null && mounted) {
         _handleWidgetRoute(data);
@@ -487,11 +498,28 @@ class _MainShellState extends State<MainShell> {
         _handleWidgetRoute(data);
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final fb = Provider.of<FirebaseService>(context, listen: false);
+      if (fb.notificationTargetTab.value != null) {
+        _onNavigateToTab(fb.notificationTargetTab.value!);
+        fb.notificationTargetTab.value = null;
+      }
+      fb.notificationTargetTab.addListener(() {
+        final target = fb.notificationTargetTab.value;
+        if (target != null && mounted) {
+          _onNavigateToTab(target);
+          fb.notificationTargetTab.value = null;
+        }
+      });
+    });
   }
 
   void _handleWidgetRoute(Map<String, dynamic> data) {
     if (data.containsKey('target_tab')) {
-      final tab = data['target_tab'] as int?;
+      final tabRaw = data['target_tab'];
+      final tab = tabRaw is int ? tabRaw : int.tryParse(tabRaw.toString());
       if (tab != null && tab >= 0) {
         _onNavigateToTab(tab);
       }
@@ -503,7 +531,13 @@ class _MainShellState extends State<MainShell> {
             builder: (_) => const UsheringTrainingView(initialTabIndex: 1),
           ),
         );
+      } else if (action == 'comms') {
+        _onNavigateToTab(4);
       }
+    } else if (data.containsKey('route') && data['route'] == '/comms') {
+      _onNavigateToTab(4);
+    } else if (data.containsKey('type') && data['type'] == 'comms') {
+      _onNavigateToTab(4);
     }
   }
 
@@ -1028,85 +1062,100 @@ class _MainShellState extends State<MainShell> {
           bottomNavigationBar: isKeyboardVisible
               ? null
               : SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                    child: SizedBox(
-                      height: 82,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.bottomCenter,
-                        children: [
-                          // Main Bar Container
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            height: 64,
-                            child: DribbbleGlassContainer(
-                              borderRadius: 28,
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                              blur: 24,
-                              backgroundColor: isDark
-                                  ? const Color(0xFF0B0F1C).withValues(alpha: 0.94)
-                                  : Colors.white.withValues(alpha: 0.96),
-                              child: Row(
-                                children: [
-                                  // Left Nav Items
-                                  Expanded(
-                                    child: Row(
-                                      children: leftNavItems.map((item) {
-                                        final isSelected = _currentTab == item['index'];
-                                        return _buildNavItem(
-                                          key: _getNavKey(item['index'] as int),
-                                          item: item,
-                                          isSelected: isSelected,
-                                          activeColor: activeColor,
-                                          inactiveColor: context.textSecondaryColor,
-                                          isDark: isDark,
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
+                  child: Builder(
+                    builder: (navContext) {
+                      final mq = MediaQuery.of(navContext);
+                      final screenW = mq.size.width;
+                      final isNarrow = screenW < 375;
+                      final textScaleVal = mq.textScaler.scale(10) / 10;
+                      final navBarH = 64.0 + (textScaleVal > 1.05 ? 6.0 : 0.0);
+                      final navSizedBoxH = navBarH + 18.0;
+                      final centerGapW = isNarrow ? 48.0 : 66.0;
+                      final horizPadding = isNarrow ? 8.0 : 14.0;
+                      final hubBtnSize = isNarrow ? 56.0 : 64.0;
 
-                                  // Gap for Central Elevated Hub Button
-                                  const SizedBox(width: 66),
+                      return Padding(
+                        padding: EdgeInsets.fromLTRB(horizPadding, 0, horizPadding, 10),
+                        child: SizedBox(
+                          height: navSizedBoxH,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              // Main Bar Container
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                height: navBarH,
+                                child: DribbbleGlassContainer(
+                                  borderRadius: 28,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                  blur: 24,
+                                  backgroundColor: isDark
+                                      ? const Color(0xFF0B0F1C).withValues(alpha: 0.94)
+                                      : Colors.white.withValues(alpha: 0.96),
+                                  child: Row(
+                                    children: [
+                                      // Left Nav Items
+                                      Expanded(
+                                        child: Row(
+                                          children: leftNavItems.map((item) {
+                                            final isSelected = _currentTab == item['index'];
+                                            return _buildNavItem(
+                                              key: _getNavKey(item['index'] as int),
+                                              item: item,
+                                              isSelected: isSelected,
+                                              activeColor: activeColor,
+                                              inactiveColor: context.textSecondaryColor,
+                                              isDark: isDark,
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
 
-                                  // Right Nav Items
-                                  Expanded(
-                                    child: Row(
-                                      children: rightNavItems.map((item) {
-                                        final isSelected = _currentTab == item['index'];
-                                        return _buildNavItem(
-                                          key: _getNavKey(item['index'] as int),
-                                          item: item,
-                                          isSelected: isSelected,
-                                          activeColor: activeColor,
-                                          inactiveColor: context.textSecondaryColor,
-                                          isDark: isDark,
-                                        );
-                                      }).toList(),
-                                    ),
+                                      // Gap for Central Elevated Hub Button
+                                      SizedBox(width: centerGapW),
+
+                                      // Right Nav Items
+                                      Expanded(
+                                        child: Row(
+                                          children: rightNavItems.map((item) {
+                                            final isSelected = _currentTab == item['index'];
+                                            return _buildNavItem(
+                                              key: _getNavKey(item['index'] as int),
+                                              item: item,
+                                              isSelected: isSelected,
+                                              activeColor: activeColor,
+                                              inactiveColor: context.textSecondaryColor,
+                                              isDark: isDark,
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
 
-                          // Elevated Central Floating Hub Button
-                          Positioned(
-                            bottom: 14,
-                            child: _buildCenterHubButton(
-                              key: _hubNavKey,
-                              context: context,
-                              activeGradient: activeGradient,
-                              activeColor: activeColor,
-                              isDark: isDark,
-                              isSelected: _currentTab == 0,
-                            ),
+                              // Elevated Central Floating Hub Button
+                              Positioned(
+                                bottom: 14,
+                                child: _buildCenterHubButton(
+                                  key: _hubNavKey,
+                                  context: context,
+                                  activeGradient: activeGradient,
+                                  activeColor: activeColor,
+                                  isDark: isDark,
+                                  isSelected: _currentTab == 0,
+                                  size: hubBtnSize,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
         )),
@@ -1231,6 +1280,7 @@ class _MainShellState extends State<MainShell> {
     required Color activeColor,
     required bool isDark,
     required bool isSelected,
+    double size = 64.0,
   }) {
     return GestureDetector(
       key: key,
@@ -1241,8 +1291,8 @@ class _MainShellState extends State<MainShell> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         child: Container(
-          width: 64,
-          height: 64,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             // Outer collar matching bar surface

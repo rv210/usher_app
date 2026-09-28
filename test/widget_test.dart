@@ -6,12 +6,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:usher_app/widgets/user_avatar.dart';
 import 'package:usher_app/models/team_member.dart';
-import 'package:usher_app/services/firebase_service.dart';
 import 'package:usher_app/views/announcements_view.dart';
+import 'package:usher_app/models/announcement.dart';
 import 'package:usher_app/models/biblical_avatar.dart';
 import 'package:usher_app/models/profile_background.dart';
 import 'package:usher_app/views/dashboard_view.dart';
-import 'package:provider/provider.dart';
 
 void main() {
   testWidgets('DribbbleGlassContainer renders child and responds to tap', (WidgetTester tester) async {
@@ -857,10 +856,37 @@ void main() {
     expect(stationOptions.length, equals(7));
   });
 
+  final testAnnouncements = [
+    const Announcement(
+      id: 'test_ann_1',
+      title: 'Quarterly Usher Team Briefing',
+      description: 'Mandatory meeting for all team members in the main sanctuary.',
+      date: 'This Sunday, 1:30 PM',
+      category: 'Usher Meetings',
+      authorName: 'Robert Vargas',
+    ),
+    const Announcement(
+      id: 'test_ann_2',
+      title: 'Night of Worship & Prayer',
+      description: 'Special worship service for church leaders and ushers.',
+      date: 'Next Friday, 7:00 PM',
+      category: 'Worship Nights',
+      authorName: 'Robert Vargas',
+    ),
+    const Announcement(
+      id: 'test_ann_3',
+      title: 'Wednesday Evening Bible Study',
+      description: 'Weekly fellowship and study in Room 204.',
+      date: 'Wednesdays, 6:30 PM',
+      category: 'Bible Studies',
+      authorName: 'Robert Vargas',
+    ),
+  ];
+
   testWidgets('AnnouncementsView renders announcement items and filter categories', (WidgetTester tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: AnnouncementsView(),
+      MaterialApp(
+        home: AnnouncementsView(initialAnnouncements: testAnnouncements),
       ),
     );
     await tester.pumpAndSettle();
@@ -879,8 +905,8 @@ void main() {
 
   testWidgets('Tapping announcement opens details modal with Share Notice and Copy actions', (WidgetTester tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: AnnouncementsView(),
+      MaterialApp(
+        home: AnnouncementsView(initialAnnouncements: testAnnouncements),
       ),
     );
     await tester.pumpAndSettle();

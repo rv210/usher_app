@@ -12,6 +12,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../models/comms_message.dart';
 import '../services/firebase_service.dart';
+import '../services/bubble_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/user_avatar.dart';
 
@@ -685,6 +686,77 @@ class _CommsViewState extends State<CommsView> {
                       ],
                     ),
                   ),
+                  // Pop Out Android Notification Bubble Button
+                  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Tooltip(
+                        message: "Pop Out Floating Bubble",
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () async {
+                            HapticFeedback.mediumImpact();
+                            await BubbleService.showBubbleNotification(
+                              senderName: signedInUserName,
+                              message: "Guardians Comms Conversation Active",
+                              senderId: firebaseService.currentUser?.uid ?? 'team_member',
+                              shortcutId: 'comms_conversation',
+                              autoExpand: true,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(LucideIcons.messageCircle, color: Colors.white, size: 20),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        "Floating chat bubble launched",
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Theme.of(context).primaryColor,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.35),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  LucideIcons.messageCircle,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  "Bubble",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

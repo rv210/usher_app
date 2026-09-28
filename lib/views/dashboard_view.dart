@@ -15,7 +15,7 @@ import 'attendance_view.dart';
 import 'announcements_view.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/profile_background_picker.dart';
-import 'comms_view.dart';
+import '../widgets/station_duties_sheet.dart';
 
 class BibleQuote {
   final String reference;
@@ -515,7 +515,7 @@ class _DashboardViewState extends State<DashboardView> {
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: goldBright, width: 1.2),
@@ -525,68 +525,13 @@ class _DashboardViewState extends State<DashboardView> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(LucideIcons.copy, size: 13, color: goldDeep),
-                                  const SizedBox(width: 5),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    "Copy",
+                                    "Copy Scripture",
                                     style: GoogleFonts.cinzel(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: goldDeep,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 10),
-
-                          // Share to Comms Button
-                          InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () async {
-                              HapticFeedback.mediumImpact();
-                              final commsText = "✝️ [DAILY SCRIPTURE • ${quote.category.toUpperCase()}]\n\"${quote.text}\"\n— ${quote.reference}";
-                              await Provider.of<FirebaseService>(context, listen: false).postCommsMessage(commsText);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const CommsView()),
-                                );
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                gradient: const LinearGradient(
-                                  colors: [goldDeep, goldBright, goldGlow],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: goldBright.withValues(alpha: 0.45),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.messageSquareShare,
-                                    size: 13,
-                                    color: isDark ? parchmentDk : Colors.white,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    "Share to Comms",
-                                    style: GoogleFonts.cinzel(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark ? parchmentDk : Colors.white,
                                     ),
                                   ),
                                 ],
@@ -612,7 +557,9 @@ class _DashboardViewState extends State<DashboardView> {
     final displayTitle = latest?.title ?? "Leadership Bulletin";
     final displayText = latest != null 
         ? "${latest.description}"
-        : firebaseService.bulletinText;
+        : (firebaseService.announcements.isEmpty
+            ? "No active announcements."
+            : firebaseService.bulletinText);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -854,7 +801,7 @@ class _DashboardViewState extends State<DashboardView> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      widget.onNavigateTab(1);
+                      StationDutiesSheet.show(context, initialStationName: stationName);
                     },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,15 +870,44 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          stationSubtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: context.textSecondaryColor,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                stationSubtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: context.textSecondaryColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(LucideIcons.clipboardCheck, size: 10, color: primaryColor),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    "Duties",
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1164,11 +1140,13 @@ class _DashboardViewState extends State<DashboardView> {
   }) {
     final stationOptions = [
       "Main Sanctuary",
+      "Vestibule",
+      "Signs/Bathroom",
+      "Petitions",
       "Nursery",
+      "Kid Church",
       "Hallway",
       "Restrooms",
-      "Kid Church",
-      "Jr.Kids",
       "Side Door",
     ];
     String selectedStation = stationOptions.contains(currentStation)
@@ -1489,10 +1467,9 @@ class _DashboardViewState extends State<DashboardView> {
         : "Off Duty • No Shift Scheduled";
 
     final displayName = (name == 'Usher' || name.isEmpty)
-        ? "Daniel Carter"
+        ? (profile?.name ?? firebaseService.currentUser?.displayName ?? "Robert Vargas")
         : name.trim();
     final displayStation = activeDeployment?.station ?? "Main Sanctuary";
-    final roleName = isAdminUser ? "Admin/Lead" : (profile?.displayRole ?? "Usher");
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -1678,84 +1655,34 @@ class _DashboardViewState extends State<DashboardView> {
                                   ),
                                 ),
                                 const SizedBox(width: 14),
-                                // Right Column: Actions (Background picker & Notification Bell) & Avatar
+                                // Right Column: Actions (Background picker) & Avatar
                                 Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Customize Card Background Button
-                                        GestureDetector(
-                                          onTap: () {
-                                            HapticFeedback.lightImpact();
-                                            showProfileBackgroundPickerSheet(context, firebaseService);
-                                          },
-                                          child: Container(
-                                            width: 36,
-                                            height: 36,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.15),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white.withValues(alpha: 0.25),
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: const Icon(
-                                              LucideIcons.image,
-                                              color: Colors.white,
-                                              size: 17,
-                                            ),
+                                    // Customize Card Background Button
+                                    GestureDetector(
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        showProfileBackgroundPickerSheet(context, firebaseService);
+                                      },
+                                      child: Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.15),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.25),
+                                            width: 1,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        // Notification Bell with Conditional Red Badge
-                                        GestureDetector(
-                                          onTap: () {
-                                            HapticFeedback.lightImpact();
-                                            firebaseService.markCommsAsRead();
-                                            widget.onNavigateTab(4);
-                                          },
-                                          child: Stack(
-                                            clipBehavior: Clip.none,
-                                            children: [
-                                              Container(
-                                                width: 38,
-                                                height: 38,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withValues(alpha: 0.14),
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: Colors.white.withValues(alpha: 0.2),
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: const Icon(
-                                                  LucideIcons.bell,
-                                                  color: Colors.white,
-                                                  size: 19,
-                                                ),
-                                              ),
-                                              if (firebaseService.hasUnreadCommsMessages)
-                                                Positioned(
-                                                  top: 2,
-                                                  right: 2,
-                                                  child: Container(
-                                                    width: 10,
-                                                    height: 10,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFFEF4444),
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(color: Colors.black54, width: 1.5),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
+                                        child: const Icon(
+                                          LucideIcons.image,
+                                          color: Colors.white,
+                                          size: 17,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                     const SizedBox(height: 12),
                                     // Circular Avatar (Custom photo or first initial monogram)
@@ -1993,6 +1920,126 @@ class _DashboardViewState extends State<DashboardView> {
                         ),
                       ),
                     ],
+                  ),
+
+                  // Detailed Station Duties Card
+                  const SizedBox(height: 10),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      StationDutiesSheet.show(
+                        context,
+                        initialStationName: stationName,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [
+                                  Theme.of(context).primaryColor.withValues(alpha: 0.18),
+                                  const Color(0xFF1E1714),
+                                ]
+                              : [
+                                  Theme.of(context).primaryColor.withValues(alpha: 0.08),
+                                  Colors.white,
+                                ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Theme.of(context).primaryColor.withValues(alpha: isDark ? 0.35 : 0.2),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: context.activeGradient,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(LucideIcons.clipboardCheck, size: 20, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      "Detailed Station Duties",
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.textPrimaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        "4 STATIONS",
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w800,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Sanctuary • Vestibule • Signs/Bath • Petitions",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: context.textSecondaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  "Checklist",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                Icon(LucideIcons.chevronRight, size: 12, color: Theme.of(context).primaryColor),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
 
                   // Spotlight Tour Integrated Strip

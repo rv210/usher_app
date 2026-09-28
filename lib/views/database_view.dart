@@ -26,8 +26,17 @@ class DatabaseView extends StatefulWidget {
 class _DatabaseViewState extends State<DatabaseView> {
   String _searchQuery = '';
   String _roleFilter = 'All';
-
   final List<String> _roleFilters = ['All', 'Admin/Lead', 'Usher'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<FirebaseService>(context, listen: false).refreshRoster();
+      }
+    });
+  }
 
   void _makePhoneCall(String phoneNumber) async {
     final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
@@ -62,9 +71,10 @@ class _DatabaseViewState extends State<DatabaseView> {
         ? firebaseService.liveRoster
         : firebaseService.approvedUsers;
 
-    // Deduplicate members across collections by ID, email, phone, and name
+    // Filter out any ghost accounts and deduplicate
+    final cleanMembers = rawMembers.where((u) => !FirebaseService.isGhostMember(u)).toList();
     final allMembers = FirebaseService.deduplicateMemberList(
-      rawMembers,
+      cleanMembers,
       currentUid: firebaseService.currentUser?.uid,
     );
 
@@ -122,13 +132,18 @@ class _DatabaseViewState extends State<DatabaseView> {
                   SnackBar(
                     content: Text(
                       count > 0
-                          ? "Successfully cleaned $count ghost/duplicate user document(s) from Firestore!"
-                          : "No ghost or duplicate users found in database!",
+                          ? "Successfully cleaned $count ghost/duplicate user document(s) from Firestore 'team' collection!"
+                          : "No ghost or duplicate users found in 'team' collection!",
                     ),
                   ),
                 );
               }
             },
+          ),
+          IconButton(
+            icon: const Icon(LucideIcons.rotateCcw),
+            tooltip: "Refresh Team Directory",
+            onPressed: () => firebaseService.refreshRoster(),
           ),
           IconButton(
             key: widget.addMemberKey,
@@ -218,41 +233,112 @@ class _DatabaseViewState extends State<DatabaseView> {
 
             // Member Roster List
             Expanded(
-              child: roster.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+              child: RefreshIndicator(
+                onRefresh: () => firebaseService.refreshRoster(),
+                child: roster.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: [
-                          Icon(LucideIcons.users, size: 48, color: context.textSecondaryColor),
-                          const SizedBox(height: 12),
-                          Text(
-                            allMembers.isNotEmpty
-                                ? "No team members found with role '$_roleFilter'"
-                                : "No team members in directory",
-                            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                          SizedBox(height: MediaQuery.of(context).size.height * (allMembers.isEmpty ? 0.08 : 0.15)),
+                          Center(
+                            child: allMembers.isNotEmpty
+                                ? Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(LucideIcons.users, size: 48, color: context.textSecondaryColor),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        "No team members found with role '$_roleFilter'",
+                                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ElevatedButton.icon(
+                                        icon: const Icon(LucideIcons.rotateCcw, size: 18),
+                                        label: Text("Show All (${allMembers.length}) Members"),
+                                        onPressed: () {
+                                          setState(() {
+                                            _roleFilter = 'All';
+                                            _searchQuery = '';
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                    child: DribbbleGlassContainer(
+                                      borderRadius: 24,
+                                      padding: const EdgeInsets.all(24),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 64,
+                                            height: 64,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              gradient: context.activeGradient,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Theme.of(context).primaryColor.withValues(alpha: 0.35),
+                                                  blurRadius: 16,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Center(
+                                              child: Icon(LucideIcons.users, size: 32, color: Colors.white),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            "No Team Members Found",
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            "There are currently no team members in this directory view. Tap refresh or add a new team member below.",
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              height: 1.45,
+                                              color: context.textSecondaryColor,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 22),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                icon: const Icon(LucideIcons.rotateCcw, size: 16),
+                                                label: const Text("Refresh"),
+                                                style: OutlinedButton.styleFrom(
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                ),
+                                                onPressed: () => firebaseService.refreshRoster(),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              ElevatedButton.icon(
+                                                icon: const Icon(LucideIcons.userPlus, size: 16),
+                                                label: const Text("Add Team Member"),
+                                                style: ElevatedButton.styleFrom(
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                                ),
+                                                onPressed: () => _showAddMemberDialog(context, firebaseService),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                           ),
-                          const SizedBox(height: 8),
-                          if (allMembers.isNotEmpty)
-                            ElevatedButton.icon(
-                              icon: const Icon(LucideIcons.rotateCcw, size: 18),
-                              label: Text("Show All (${allMembers.length}) Members"),
-                              onPressed: () {
-                                setState(() {
-                                  _roleFilter = 'All';
-                                  _searchQuery = '';
-                                });
-                              },
-                            )
-                          else
-                            ElevatedButton.icon(
-                              icon: const Icon(LucideIcons.userPlus, size: 18),
-                              label: const Text("Add First Member"),
-                              onPressed: () => _showAddMemberDialog(context, firebaseService),
-                            ),
                         ],
-                      ),
-                    )
-                  : ListView.separated(
+                      )
+                    : ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).size.width >= 800 ? 30 : 85),
@@ -452,6 +538,7 @@ class _DatabaseViewState extends State<DatabaseView> {
                         );
                       },
                     ),
+                ),
             ),
           ],
         ),

@@ -72,23 +72,20 @@ class TeamMember {
     final String? phone = parseStr(data['phone'] ?? data['Phone'] ?? data['phoneNumber'] ?? data['mobile'] ?? data['contact']);
     String? role = parseStr(data['role'] ?? data['Role'] ?? data['position'] ?? data['title']);
 
-    final String finalName = (parsedName != null && parsedName.trim().isNotEmpty)
+    final String? finalName = (parsedName != null && parsedName.trim().isNotEmpty)
         ? parsedName.trim()
         : (email != null && email.contains('@'))
             ? email.split('@').first
             : (phone != null && phone.trim().isNotEmpty)
                 ? phone.trim()
-                : 'Usher';
+                : null;
 
     final lEmail = (email ?? '').toLowerCase();
-    final lName = finalName.toLowerCase();
+    final lRole = (role ?? '').toLowerCase();
 
     final bool isKnownAdmin = lEmail.contains('robv88') ||
-        lName.contains('robert') ||
-        lName.contains('vargas') ||
-        lName.contains('louis') ||
-        lName.contains('richardson') ||
-        role == 'Admin';
+        lRole == 'admin' ||
+        lRole.contains('admin');
 
     bool approved;
     if (isKnownAdmin) {
@@ -175,21 +172,14 @@ class TeamMember {
   bool get isAdmin {
     final lRole = (role ?? '').toLowerCase();
     final lEmail = (email ?? '').toLowerCase();
-    final lName = (name ?? '').toLowerCase();
-    final lPhone = (phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
 
     return lRole == 'admin' ||
-        lEmail.contains('robv88') ||
-        lName.contains('robert') ||
-        lName.contains('vargas') ||
-        lName.contains('louis') ||
-        lName.contains('richardson') ||
-        lName.contains('matthias') ||
-        lName.contains('breyer') ||
-        lPhone.contains('3183449278');
+        lRole.contains('admin') ||
+        lEmail == 'robv88@gmail.com' ||
+        lEmail.contains('robv88');
   }
 
-  bool get isLead => (role?.toLowerCase() == 'lead' || isAdmin);
+  bool get isLead => (role?.toLowerCase() == 'lead' || role?.toLowerCase().contains('lead') == true || isAdmin);
 
   String get displayRole => isAdmin ? 'Admin/Lead' : (role ?? 'Usher');
 

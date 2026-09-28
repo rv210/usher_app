@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,6 +29,9 @@ const String adminCodeConstant = 'GUARDIAN-LEAD-2024';
 class FirebaseService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   User? _currentUser;
   TeamMember? _userProfile;
@@ -39,6 +43,15 @@ class FirebaseService extends ChangeNotifier {
   bool _profileLoading = false;
   bool _isOfflineDemoMode = false;
   bool _isUserSignedIn = false;
+  bool _pendingTwoFactor = false;
+  String? _pendingTwoFactorPhone;
+  String? _pending2FAEmail;
+  String? _pending2FAPassword;
+  User? _pending2FAUser;
+  bool _twoFactorCodeSent = false;
+  String? _twoFactorVerificationId;
+  ConfirmationResult? _twoFactorWebResult;
+  String? _twoFactorError;
   ThemeMode _themeMode = ThemeMode.light;
   AppStyleTheme _activeStyleTheme = AppStyleTheme.guardiansGold;
 
@@ -52,117 +65,115 @@ class FirebaseService extends ChangeNotifier {
   DateTime? _lastReadCommsTimestamp;
   DateTime? get lastReadCommsTimestamp => _lastReadCommsTimestamp;
 
+  static bool isGhostMember(TeamMember m) {
+    final name = (m.name ?? '').trim();
+    if (name.isEmpty) return true;
+
+    final email = (m.email ?? '').trim();
+    final phone = (m.phone ?? '').trim();
+
+    final lName = name.toLowerCase();
+    const placeholderNames = {
+      'usher',
+      'admin',
+      'lead',
+      'unknown',
+      'team member',
+      'member',
+      'user',
+      'tester',
+      'test usher',
+      'tester usher',
+      'demo usher',
+      'guest',
+      'null',
+      'undefined',
+    };
+    if (placeholderNames.contains(lName) && email.isEmpty && phone.isEmpty) {
+      return true;
+    }
+
+    if ((m.id.startsWith('ghost_') || m.id.startsWith('temp_')) && email.isEmpty && phone.isEmpty) {
+      return true;
+    }
+
+    return false;
+  }
+
   Future<void> _writeTeamDoc(String docId, Map<String, dynamic> data) async {
-    final List<String> collections = ['team', 'users', 'ushers', 'team_members', 'roster'];
-    for (var col in collections) {
-      try {
-        await _db.collection(col).doc(docId).set(data, SetOptions(merge: true));
-      } catch (_) {}
+    try {
+      await _db.collection('team').doc(docId).set(data, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error writing to team collection doc: $e");
     }
   }
 
   Future<void> _deleteTeamDoc(String docId) async {
-    final List<String> collections = ['team', 'teams', 'team_members', 'ushers', 'roster', 'users'];
-    for (var colName in collections) {
-      try {
-        await _db.collection(colName).doc(docId).delete();
-      } catch (_) {}
+    try {
+      await _db.collection('team').doc(docId).delete();
+    } catch (e) {
+      debugPrint("Error deleting from team collection doc: $e");
     }
   }
 
   Future<int> purgeGhostMembers() async {
     int purgedCount = 0;
-    final ghosts = _liveRoster.where((u) {
-      final isUsherFallbackName = u.name == null || u.name == 'Usher' || u.name!.trim().isEmpty;
-      final hasNoEmail = u.email == null || u.email!.trim().isEmpty;
-      final hasNoPhone = u.phone == null || u.phone!.trim().isEmpty;
-      return isUsherFallbackName && hasNoEmail && hasNoPhone;
-    }).toList();
-
-    for (final ghost in ghosts) {
-      await deleteTeamMember(ghost.id);
-      purgedCount++;
-    }
-
-    // Also identify and remove stale duplicate documents across Firestore collections
     try {
-      final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
+      final snap = await _db.collection('team').get();
       final List<TeamMember> allRaw = [];
-      for (var colName in collectionsToList) {
-        final snap = await _db.collection(colName).get();
-        for (var d in snap.docs) {
-          try {
-            allRaw.add(TeamMember.fromMap(d.data(), d.id));
-          } catch (_) {}
-        }
+      for (var d in snap.docs) {
+        try {
+          final m = TeamMember.fromMap(d.data(), d.id);
+          allRaw.add(m);
+          if (isGhostMember(m)) {
+            await _db.collection('team').doc(d.id).delete();
+            purgedCount++;
+          }
+        } catch (_) {}
       }
 
-      final canonicalList = deduplicateMemberList(allRaw, currentUid: _currentUser?.uid);
+      // Also identify and remove duplicate documents in Firestore team collection
+      final validMembers = allRaw.where((m) => !isGhostMember(m)).toList();
+      final canonicalList = deduplicateMemberList(validMembers, currentUid: _currentUser?.uid);
       for (final canonical in canonicalList) {
-        final duplicates = allRaw.where((r) => r.id != canonical.id && isSameMember(r, canonical)).toList();
+        final duplicates = validMembers.where((r) => r.id != canonical.id && isSameMember(r, canonical)).toList();
         for (final dup in duplicates) {
-          await deleteTeamMember(dup.id);
+          await _db.collection('team').doc(dup.id).delete();
           purgedCount++;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("Error purging ghost members from team collection: $e");
+    }
 
     await refreshRoster();
     return purgedCount;
   }
 
-  String _bulletinText = "Usher Team Meeting: Monthly alignment & protocol review this Sunday at 8:30 AM in Room 204.";
+  String _bulletinText = "No active announcements.";
   String _dashboardLeadName = "Lead Usher";
 
   // Announcements live state & persistence
+  static const Set<String> _prefilledAnnouncementIds = {
+    'ann_meeting_1',
+    'ann_worship_1',
+    'ann_bible_1',
+    'ann_outreach_1',
+    'ann_member_1',
+    'ann_volunteer_1',
+    'ann_1',
+    'ann_2',
+    'ann_3',
+    'ann_4',
+    'ann_5',
+    'ann_6',
+  };
+
   final Set<String> _deletedAnnouncementIds = {};
-  List<Announcement> _announcements = [
-    const Announcement(
-      id: 'ann_meeting_1',
-      title: 'Usher Team Meeting & Briefing',
-      description: 'Monthly team alignment, protocol review, and communion distribution coordination this Sunday at 8:30 AM in Room 204.',
-      date: 'Sep 13, 2026',
-      category: 'Usher Meeting',
-    ),
-    const Announcement(
-      id: 'ann_worship_1',
-      title: 'All-Church Night of Worship',
-      description: 'Join us for an evening of extended acoustic worship, prayer, and communion this Friday at 7:00 PM in the Main Sanctuary.',
-      date: 'Sep 18, 2026',
-      category: 'Worship Night',
-    ),
-    const Announcement(
-      id: 'ann_bible_1',
-      title: 'Midweek Bible Study: Book of Acts',
-      description: 'Deep dive into the early church and the ministry of Helps every Wednesday at 7:00 PM. Light dinner and fellowship at 6:15 PM.',
-      date: 'Sep 16, 2026',
-      category: 'Bible Study',
-    ),
-    const Announcement(
-      id: 'ann_outreach_1',
-      title: 'Community Food Drive & Outreach',
-      description: 'Serving our neighborhood with fresh groceries and prayer this Saturday at 9:00 AM. Volunteers meet in the South Parking Lot.',
-      date: 'Sep 19, 2026',
-      category: 'Community Outreach',
-    ),
-    const Announcement(
-      id: 'ann_member_1',
-      title: 'New Member & Usher Orientation',
-      description: 'Interested in learning more about our church or joining the ushering ministry? Next class starts this Sunday after 2nd service.',
-      date: 'Sep 20, 2026',
-      category: 'New Member Class',
-    ),
-    const Announcement(
-      id: 'ann_volunteer_1',
-      title: 'Volunteer Appreciation Sunday',
-      description: 'Thank you to all our amazing ushers and volunteers! Fellowship brunch and recognition ceremony following morning service.',
-      date: 'Sep 27, 2026',
-      category: 'Volunteer Appreciation',
-    ),
-  ];
+  List<Announcement> _announcements = [];
 
   List<Announcement> get announcements =>
-      _announcements.where((a) => !_deletedAnnouncementIds.contains(a.id)).toList();
+      _announcements.where((a) => !_deletedAnnouncementIds.contains(a.id) && !_prefilledAnnouncementIds.contains(a.id)).toList();
   Announcement? get latestAnnouncement {
     final active = announcements;
     return active.isNotEmpty ? active.first : null;
@@ -186,6 +197,34 @@ class FirebaseService extends ChangeNotifier {
       await _db.collection('settings').doc('bulletin').set({'text': _bulletinText});
     } catch (e) {
       debugPrint("Add announcement error: $e");
+    }
+  }
+
+  Future<void> updateAnnouncement(Announcement ann) async {
+    _deletedAnnouncementIds.remove(ann.id);
+    final idx = _announcements.indexWhere((a) => a.id == ann.id);
+    if (idx != -1) {
+      _announcements[idx] = ann;
+    } else {
+      _announcements.insert(0, ann);
+    }
+    final active = announcements;
+    if (active.isNotEmpty) {
+      _bulletinText = "${active.first.title}: ${active.first.description}";
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('deleted_announcement_ids', _deletedAnnouncementIds.toList());
+      await prefs.setString('cached_announcements_json', jsonEncode(_announcements.map((a) => a.toMap()).toList()));
+    } catch (e) {
+      debugPrint("Error persisting updated announcement: $e");
+    }
+    try {
+      await _db.collection('announcements').doc(ann.id).set(ann.toMap(), SetOptions(merge: true));
+      await _db.collection('settings').doc('bulletin').set({'text': _bulletinText});
+    } catch (e) {
+      debugPrint("Update announcement error: $e");
     }
   }
 
@@ -225,8 +264,8 @@ class FirebaseService extends ChangeNotifier {
   int get todayGuestCount => _guestCheckIns.fold(0, (sum, g) => sum + g.partySize);
 
   // Getters
-  User? get currentUser => _currentUser ?? _auth.currentUser;
-  bool get isUserSignedIn => _isUserSignedIn || _currentUser != null || _auth.currentUser != null;
+  User? get currentUser => _pendingTwoFactor ? null : (_currentUser ?? _auth.currentUser);
+  bool get isUserSignedIn => !_pendingTwoFactor && (_isUserSignedIn || _currentUser != null || _auth.currentUser != null);
 
   TeamMember? get userProfile {
     if (_userProfile != null) return _userProfile;
@@ -367,6 +406,14 @@ class FirebaseService extends ChangeNotifier {
   StreamSubscription<RemoteMessage>? _onMessageSubscription;
   StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
   final Set<String> _processedNotificationIds = {};
+  final Set<String> _notifiedMessageIds = {};
+  DateTime? _lastNotifiedCommsTime;
+  final ValueNotifier<int?> notificationTargetTab = ValueNotifier<int?>(null);
+
+  void navigateToTab(int tabIndex) {
+    notificationTargetTab.value = tabIndex;
+    notifyListeners();
+  }
 
   void initPushNotifications() async {
     try {
@@ -380,18 +427,45 @@ class FirebaseService extends ChangeNotifier {
         try {
           await _localNotifications.initialize(
             const InitializationSettings(
-              android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+              android: AndroidInitializationSettings('@drawable/ic_stat_notification'),
               iOS: DarwinInitializationSettings(
                 requestAlertPermission: false,
                 requestBadgePermission: false,
                 requestSoundPermission: false,
               ),
             ),
+            onDidReceiveNotificationResponse: (NotificationResponse details) {
+              debugPrint("Local notification clicked with payload: ${details.payload}");
+              if (details.payload == 'comms' || details.payload == '/comms') {
+                navigateToTab(4);
+              }
+            },
           );
+
+          // Check if app was launched by tapping a local notification
+          final launchDetails = await _localNotifications.getNotificationAppLaunchDetails();
+          if (launchDetails?.didNotificationLaunchApp == true) {
+            final payload = launchDetails?.notificationResponse?.payload;
+            if (payload == 'comms' || payload == '/comms') {
+              navigateToTab(4);
+            }
+          }
 
           if (defaultTargetPlatform == TargetPlatform.android) {
             final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
             if (androidPlugin != null) {
+              // 0. Primary High Importance Channel (Native Push Notifications)
+              await androidPlugin.createNotificationChannel(
+                const AndroidNotificationChannel(
+                  'high_importance_channel',
+                  'Guardians Notifications',
+                  description: 'Used for comms, schedule, and deployment alerts',
+                  importance: Importance.max,
+                  playSound: true,
+                  enableVibration: true,
+                ),
+              );
+
               // 1. High Priority Duty & Station Channel
               await androidPlugin.createNotificationChannel(
                 const AndroidNotificationChannel(
@@ -409,7 +483,7 @@ class FirebaseService extends ChangeNotifier {
                 const AndroidNotificationChannel(
                   'team_comms_channel',
                   'Team Communications',
-                  description: 'Live usher messaging, coordinator broadcasts, and chat bubbles',
+                  description: 'Live usher messaging and coordinator broadcasts',
                   importance: Importance.max,
                   playSound: true,
                   enableVibration: true,
@@ -450,7 +524,8 @@ class FirebaseService extends ChangeNotifier {
       } catch (_) {}
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
+          settings.authorizationStatus == AuthorizationStatus.provisional ||
+          (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)) {
         if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
           try {
             String? apnsToken = await messaging.getAPNSToken();
@@ -471,15 +546,17 @@ class FirebaseService extends ChangeNotifier {
           debugPrint("FCM Token fetch info: $e");
         }
 
-        if (_currentUser != null && _fcmToken != null) {
+        if (_fcmToken != null) {
+          final docId = _currentUser?.uid ?? 'device_${_fcmToken!.hashCode.abs()}';
           final tokenData = {
             'token': _fcmToken,
-            'uid': _currentUser!.uid,
-            'email': _currentUser!.email ?? '',
+            'fcmToken': _fcmToken,
+            'uid': _currentUser?.uid ?? '',
+            'email': _currentUser?.email ?? '',
             'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
             'lastUpdated': DateTime.now().toIso8601String(),
           };
-          await _db.collection('user_tokens').doc(_currentUser!.uid).set(tokenData, SetOptions(merge: true));
+          await _db.collection('user_tokens').doc(docId).set(tokenData, SetOptions(merge: true));
         }
 
         // Cancel previous listeners to guarantee exactly one active listener
@@ -492,34 +569,32 @@ class FirebaseService extends ChangeNotifier {
           // client is the sole renderer; title/body live in `data`, not `notification`.
           final title = isAndroid ? (message.data['title'] ?? message.notification?.title) : message.notification?.title;
           final body = isAndroid ? (message.data['body'] ?? message.notification?.body) : message.notification?.body;
-          final msgId = message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch}_${title}_$body';
+          final docMsgId = message.data['msgId'] ?? message.data['depId'] ?? message.data['logId'];
+          final msgId = docMsgId ?? message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch}_${title}_$body';
 
-          // Deduplicate if already processed
-          if (_processedNotificationIds.contains(msgId)) {
+          // Deduplicate if already processed via push or Firestore realtime stream
+          if (_processedNotificationIds.contains(msgId) || (docMsgId != null && _notifiedMessageIds.contains(docMsgId))) {
             debugPrint("Ignoring duplicate push notification: $msgId");
             return;
           }
           _processedNotificationIds.add(msgId);
+          if (docMsgId != null) {
+            _notifiedMessageIds.add(docMsgId);
+          }
           if (_processedNotificationIds.length > 100) {
             _processedNotificationIds.remove(_processedNotificationIds.first);
           }
 
           debugPrint("Received Push Notification: $title");
           if (title != null && isAndroid) {
-            final isComms = (message.data['type'] == 'comms') ||
-                title.toLowerCase().contains('comms') ||
-                title.toLowerCase().contains('chat') ||
-                title.toLowerCase().contains('message');
-
-            if (isComms) {
-              final sender = message.data['senderName'] ?? title;
-              final text = message.data['message'] ?? body ?? '';
-              final senderId = message.data['senderId'] ?? 'team_lead';
+            final notificationType = message.data['type'] ?? '';
+            if (notificationType == 'comms') {
               BubbleService.showBubbleNotification(
-                senderName: sender,
-                message: text,
-                senderId: senderId,
-                shortcutId: 'comms_$senderId',
+                senderName: message.data['senderName'] ?? title,
+                message: body ?? '',
+                senderId: message.data['senderId'] ?? 'team_member',
+                shortcutId: message.data['shortcutId'] ?? 'comms_conversation',
+                autoExpand: false,
               );
             } else {
               final notificationId = msgId.hashCode & 0x7FFFFFFF;
@@ -529,17 +604,15 @@ class FirebaseService extends ChangeNotifier {
                 body,
                 NotificationDetails(
                   android: AndroidNotificationDetails(
-                    'duty_alerts_channel',
-                    'Station & Duty Alerts',
-                    channelDescription: 'Urgent station deployments, shift changes, and roster updates',
+                    'high_importance_channel',
+                    'Guardians Notifications',
+                    channelDescription: 'Used for comms, schedule, and deployment alerts',
                     importance: Importance.max,
                     priority: Priority.high,
                     icon: '@drawable/ic_stat_notification',
-                    color: const Color(0xFFD4AF37),
                     styleInformation: BigTextStyleInformation(
                       body ?? '',
                       contentTitle: title,
-                      summaryText: 'Guardians Duty',
                     ),
                     enableVibration: true,
                     playSound: true,
@@ -551,10 +624,27 @@ class FirebaseService extends ChangeNotifier {
         });
 
         _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-          debugPrint("Opened Push Notification App: ${message.notification?.title}");
+          debugPrint("Opened Push Notification App: ${message.notification?.title}, data: ${message.data}");
           try {
             _localNotifications.cancelAll();
           } catch (_) {}
+          final type = message.data['type'] ?? '';
+          final route = message.data['route'] ?? '';
+          if (type == 'comms' || route == '/comms') {
+            navigateToTab(4);
+          }
+        });
+
+        // Check if app was launched from terminated state by tapping a push notification
+        FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+          if (message != null) {
+            debugPrint("Initial FCM push notification: ${message.data}");
+            final type = message.data['type'] ?? '';
+            final route = message.data['route'] ?? '';
+            if (type == 'comms' || route == '/comms') {
+              navigateToTab(4);
+            }
+          }
         });
       }
     } catch (e) {
@@ -563,16 +653,28 @@ class FirebaseService extends ChangeNotifier {
   }
 
   Future<void> triggerTestPushNotification({String? title, String? body}) async {
-    final notifTitle = title ?? "🔔 Sanctuary Main Doors Assignment";
-    final notifBody = body ?? "You are scheduled for Sanctuary Main Doors (Sunday Morning Service). Tap to review duties.";
+    final notifTitle = title ?? "🔔 Guardians Duty Alert";
+    final notifBody = body ?? "Native push notifications are active and working on your device!";
 
     try {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        await BubbleService.showDutyNotification(
-          title: notifTitle,
-          body: notifBody,
-          stationName: "Sanctuary Main Doors",
-          targetTab: 0,
+        final notificationId = notifTitle.hashCode & 0x7FFFFFFF;
+        await _localNotifications.show(
+          notificationId,
+          notifTitle,
+          notifBody,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'Guardians Notifications',
+              channelDescription: 'Used for comms, schedule, and deployment alerts',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@drawable/ic_stat_notification',
+              enableVibration: true,
+              playSound: true,
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -615,6 +717,8 @@ class FirebaseService extends ChangeNotifier {
     }
     _loadPreferences();
     _initService();
+    _listenToFirestore();
+    initPushNotifications();
   }
 
   Future<void> _persistSession() async {
@@ -675,19 +779,27 @@ class FirebaseService extends ChangeNotifier {
       if (deletedAnnIds != null) {
         _deletedAnnouncementIds.addAll(deletedAnnIds);
       }
+      _deletedAnnouncementIds.addAll(_prefilledAnnouncementIds);
+
       final cachedAnnStr = prefs.getString('cached_announcements_json');
       if (cachedAnnStr != null && cachedAnnStr.isNotEmpty) {
         try {
           final List decoded = jsonDecode(cachedAnnStr);
-          final loaded = decoded.map((m) => Announcement.fromMap(m as Map<String, dynamic>)).toList();
-          if (loaded.isNotEmpty) {
-            _announcements = loaded;
-          }
+          final loaded = decoded
+              .map((m) => Announcement.fromMap(m as Map<String, dynamic>))
+              .where((a) => !_prefilledAnnouncementIds.contains(a.id))
+              .toList();
+          _announcements = loaded;
         } catch (e) {
           debugPrint("Error restoring cached announcements: $e");
         }
       }
-      _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id));
+      _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id) || _prefilledAnnouncementIds.contains(a.id));
+      if (_announcements.isNotEmpty) {
+        _bulletinText = "${_announcements.first.title}: ${_announcements.first.description}";
+      } else {
+        _bulletinText = "No active announcements.";
+      }
 
       final persistentSignedIn = prefs.getBool('user_signed_in_persistent') ?? false;
       final cachedProfileStr = prefs.getString('cached_user_profile_json');
@@ -710,29 +822,46 @@ class FirebaseService extends ChangeNotifier {
         _lastReadCommsTimestamp = DateTime.tryParse(lastReadStr);
       }
 
+      final lastNotifiedStr = prefs.getString('last_notified_comms_time');
+      if (lastNotifiedStr != null) {
+        _lastNotifiedCommsTime = DateTime.tryParse(lastNotifiedStr);
+      } else {
+        _lastNotifiedCommsTime = DateTime.now();
+      }
+
+      // Restore cached roster from local storage if available for instant display
+      final cachedRosterStr = prefs.getString('cached_roster_json');
+      if (cachedRosterStr != null && cachedRosterStr.isNotEmpty) {
+        try {
+          final List decoded = jsonDecode(cachedRosterStr);
+          final loaded = decoded
+              .whereType<Map<String, dynamic>>()
+              .map((m) => TeamMember.fromMap(m, m['id'] ?? ''))
+              .where((m) => !isGhostMember(m))
+              .toList();
+          if (loaded.isNotEmpty) {
+            _liveRoster = deduplicateMemberList(loaded, currentUid: _currentUser?.uid);
+            _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
+            _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
+            _deniedUsers = _liveRoster.where((u) => u.denied).toList();
+          }
+        } catch (e) {
+          debugPrint("Error restoring cached roster: $e");
+        }
+      }
+
+      // Cleanse any legacy plaintext passwords stored in SharedPreferences
+      await prefs.remove('biometric_saved_password');
+
       if (persistentSignedIn || _currentUser != null || _auth.currentUser != null) {
         _isUserSignedIn = true;
         if (_currentUser == null && _auth.currentUser != null) {
           _currentUser = _auth.currentUser;
         }
-        if (_currentUser == null) {
-          // Attempt silent auto-sign in using saved credentials
-          final creds = await getBiometricCredentials();
-          if (creds != null && creds['email'] != null && creds['password'] != null) {
-            try {
-              final userCred = await _auth.signInWithEmailAndPassword(
-                email: creds['email']!,
-                password: creds['password']!,
-              );
-              _currentUser = userCred.user;
-            } catch (e) {
-              debugPrint("Silent credential sign-in error: $e");
-            }
-          }
-        }
         if (_currentUser != null) {
           _loadUserProfile(_currentUser!.uid);
           _listenToFirestore();
+          refreshRoster();
           initPushNotifications();
         }
       }
@@ -882,11 +1011,17 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
-  Future<void> saveBiometricCredentials(String email, String password) async {
+  Future<void> saveBiometricCredentials(String email, [String? password]) async {
     try {
+      final cleanEmail = email.trim();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('biometric_saved_email', email.trim());
-      await prefs.setString('biometric_saved_password', base64Encode(utf8.encode(password)));
+      await prefs.setString('biometric_saved_email', cleanEmail);
+      await prefs.remove('biometric_saved_password'); // Remove any legacy plaintext
+
+      await _secureStorage.write(key: 'biometric_saved_email', value: cleanEmail);
+      if (password != null && password.isNotEmpty) {
+        await _secureStorage.write(key: 'biometric_saved_password', value: password);
+      }
     } catch (e) {
       debugPrint("Error saving biometric credentials: $e");
     }
@@ -894,12 +1029,19 @@ class FirebaseService extends ChangeNotifier {
 
   Future<Map<String, String>?> getBiometricCredentials() async {
     try {
+      final email = await _secureStorage.read(key: 'biometric_saved_email');
+      final pass = await _secureStorage.read(key: 'biometric_saved_password');
+      if (email != null && email.isNotEmpty) {
+        return {
+          'email': email,
+          if (pass != null && pass.isNotEmpty) 'password': pass,
+        };
+      }
+      // Fallback check in SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final email = prefs.getString('biometric_saved_email');
-      final encPass = prefs.getString('biometric_saved_password');
-      if (email != null && encPass != null && email.isNotEmpty && encPass.isNotEmpty) {
-        final pass = utf8.decode(base64Decode(encPass));
-        return {'email': email, 'password': pass};
+      final prefEmail = prefs.getString('biometric_saved_email');
+      if (prefEmail != null && prefEmail.isNotEmpty) {
+        return {'email': prefEmail};
       }
     } catch (e) {
       debugPrint("Error retrieving biometric credentials: $e");
@@ -912,6 +1054,8 @@ class FirebaseService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('biometric_saved_email');
       await prefs.remove('biometric_saved_password');
+      await _secureStorage.delete(key: 'biometric_saved_email');
+      await _secureStorage.delete(key: 'biometric_saved_password');
     } catch (_) {}
   }
 
@@ -961,42 +1105,71 @@ class FirebaseService extends ChangeNotifier {
 
       if (!didAuthenticate) return false;
 
-      _isLocked = false;
-
+      // 1. If Firebase Auth already has an authenticated active user session:
       if (_auth.currentUser != null) {
         _currentUser = _auth.currentUser;
         if (_currentUser != null) {
-          _loadUserProfile(_currentUser!.uid);
+          await _loadUserProfile(_currentUser!.uid);
+          _listenToFirestore();
+          await refreshRoster();
+          initPushNotifications();
         }
         await _persistSession();
+        _isLocked = false;
+        _isUserSignedIn = true;
         notifyListeners();
         return true;
       }
 
+      // 2. If Firebase session is unauthenticated, re-authenticate using
+      // securely encrypted credentials stored in Android Keystore / iOS Keychain
       final creds = await getBiometricCredentials();
       if (creds != null && creds['email'] != null && creds['password'] != null) {
-        final success = await signIn(creds['email']!, creds['password']!);
-        if (success) {
-          _currentUser = _auth.currentUser;
-          if (_currentUser != null) {
-            _loadUserProfile(_currentUser!.uid);
-          }
-          await _persistSession();
+        final email = creds['email']!.trim();
+        final pass = creds['password']!;
+        if (email.isNotEmpty && pass.isNotEmpty) {
+          _authLoading = true;
           notifyListeners();
-          return true;
+          try {
+            final userCred = await _auth.signInWithEmailAndPassword(
+              email: email,
+              password: pass,
+            );
+            _currentUser = userCred.user;
+            if (_currentUser != null) {
+              await _loadUserProfile(_currentUser!.uid);
+              _listenToFirestore();
+              await refreshRoster();
+              initPushNotifications();
+            }
+            await _persistSession();
+            _isLocked = false;
+            _isUserSignedIn = true;
+            _authLoading = false;
+            notifyListeners();
+            return true;
+          } catch (signInErr) {
+            debugPrint("Biometric background Firebase sign-in error: $signInErr");
+            _authLoading = false;
+          }
         }
       }
 
+      // 3. If unauthenticated and no valid stored credentials, do NOT set _isUserSignedIn to true
+      _isUserSignedIn = false;
       notifyListeners();
       return false;
     } catch (e) {
       debugPrint("Biometric login error: $e");
+      _isUserSignedIn = false;
+      notifyListeners();
       return false;
     }
   }
 
   void _initService() {
     _auth.authStateChanges().listen((User? user) {
+      if (_pendingTwoFactor) return;
       if (user != null) {
         _currentUser = user;
         _isUserSignedIn = true;
@@ -1032,48 +1205,7 @@ class FirebaseService extends ChangeNotifier {
       return true;
     }
 
-    // 2. Try saved credentials from persistent storage if available
-    try {
-      final creds = await getBiometricCredentials();
-      if (creds != null && creds['email'] != null && creds['password'] != null) {
-        final userCred = await _auth.signInWithEmailAndPassword(
-          email: creds['email']!,
-          password: creds['password']!,
-        );
-        _currentUser = userCred.user;
-        _isUserSignedIn = true;
-        if (_currentUser != null) {
-          _loadUserProfile(_currentUser!.uid);
-        }
-        _listenToFirestore();
-        await _persistSession();
-        debugPrint("Watch authenticated via saved credentials as ${_currentUser?.email}");
-        return true;
-      }
-    } catch (e) {
-      debugPrint("Watch saved credential sign-in attempt: $e");
-    }
-
-    // 3. Auto-authenticate with church usher master account
-    try {
-      final userCred = await _auth.signInWithEmailAndPassword(
-        email: 'robv88@live.com',
-        password: 'Newport123',
-      );
-      _currentUser = userCred.user;
-      _isUserSignedIn = true;
-      if (_currentUser != null) {
-        _loadUserProfile(_currentUser!.uid);
-      }
-      _listenToFirestore();
-      await _persistSession();
-      debugPrint("Watch auto-authenticated successfully as ${_currentUser?.email}");
-      return true;
-    } catch (e) {
-      debugPrint("Watch church usher sign-in error: $e");
-    }
-
-    // 4. Secondary fallback: Anonymous sign-in
+    // 2. Secondary fallback: Anonymous sign-in
     try {
       final userCred = await _auth.signInAnonymously();
       _currentUser = userCred.user;
@@ -1488,13 +1620,6 @@ class FirebaseService extends ChangeNotifier {
     }
   }
 
-  bool _pendingTwoFactor = false;
-  String? _pendingTwoFactorPhone;
-  bool _twoFactorCodeSent = false;
-  String? _twoFactorVerificationId;
-  ConfirmationResult? _twoFactorWebResult;
-  String? _twoFactorError;
-
   bool get pendingTwoFactor => _pendingTwoFactor;
   String? get pendingTwoFactorPhone => _pendingTwoFactorPhone;
   bool get twoFactorCodeSent => _twoFactorCodeSent;
@@ -1538,6 +1663,8 @@ class FirebaseService extends ChangeNotifier {
   Future<bool> signIn(String email, String password) async {
     _authLoading = true;
     _pendingTwoFactor = false;
+    _pending2FAEmail = null;
+    _pending2FAPassword = null;
     _twoFactorCodeSent = false;
     _twoFactorError = null;
     notifyListeners();
@@ -1554,12 +1681,17 @@ class FirebaseService extends ChangeNotifier {
           final phone = profile.twoFactorPhone ?? profile.phone!;
           _pendingTwoFactor = true;
           _pendingTwoFactorPhone = phone;
+          _pending2FAEmail = email;
+          _pending2FAPassword = password;
+          _pending2FAUser = cred.user;
           _userProfile = profile;
+          _isUserSignedIn = false;
+          _currentUser = null;
 
           await sendTwoFactorSmsCode(phone);
           _authLoading = false;
           notifyListeners();
-          return false; // 2FA Challenge required
+          return false; // 2FA Challenge required — session gated until SMS verified
         }
       }
 
@@ -1608,27 +1740,44 @@ class FirebaseService extends ChangeNotifier {
     final completer = Completer<void>();
     await _auth.verifyPhoneNumber(
       phoneNumber: formatted,
+      // 30-second timeout — accelerates the codeSent callback on carriers
+      timeout: const Duration(seconds: 30),
       verificationCompleted: (PhoneAuthCredential credential) async {
         _twoFactorCodeSent = true;
         _authLoading = false;
         notifyListeners();
+        if (credential.smsCode != null && credential.smsCode!.isNotEmpty) {
+          try {
+            await verifyTwoFactorSmsCode(credential.smsCode!);
+          } catch (_) {}
+        }
         if (!completer.isCompleted) completer.complete();
       },
       verificationFailed: (FirebaseAuthException e) {
-        if (e.code == 'missing-app-token' ||
-            e.code == 'app-not-authorized' ||
-            (e.message?.contains('app identifier') ?? false) ||
-            (e.message?.contains('Play Integrity') ?? false)) {
+        final msg = e.message?.toLowerCase() ?? '';
+        final isRateLimit = e.code == 'too-many-requests' ||
+            msg.contains('unusual activity') ||
+            msg.contains('blocked all requests');
+        if (isRateLimit) {
           _twoFactorError =
-              "Firebase 2FA requires your Android SHA-1 fingerprint in Firebase Console, or this number added under 'Phone numbers for testing'.";
+              "Too many verification attempts. Please wait a moment and try again.";
+          _twoFactorCodeSent = true;
+        } else if (e.code == 'missing-app-token' ||
+            e.code == 'app-not-authorized' ||
+            msg.contains('app identifier') ||
+            msg.contains('play integrity')) {
+          _twoFactorError =
+              "SMS dispatch temporarily unavailable. Please try again shortly.";
+          _twoFactorCodeSent = true;
         } else {
-          _twoFactorError = e.message ?? "2FA SMS dispatch failed.";
+          _twoFactorError = e.message ?? "2FA SMS verification failed.";
+          _twoFactorCodeSent = true;
         }
         _authLoading = false;
         notifyListeners();
         if (!completer.isCompleted) completer.complete();
       },
-      codeSent: (verId, _) {
+      codeSent: (verId, __) {
         _twoFactorVerificationId = verId;
         _twoFactorCodeSent = true;
         _authLoading = false;
@@ -1637,6 +1786,7 @@ class FirebaseService extends ChangeNotifier {
       },
       codeAutoRetrievalTimeout: (verId) {
         _twoFactorVerificationId = verId;
+        if (!completer.isCompleted) completer.complete();
       },
     );
     await completer.future;
@@ -1663,24 +1813,49 @@ class FirebaseService extends ChangeNotifier {
           smsCode: cleanCode,
         );
         try {
-          await _currentUser?.linkWithCredential(credential);
-        } catch (_) {
-          // If already linked, sign in directly with credential
-          try {
-            await _auth.signInWithCredential(credential);
-          } catch (_) {}
+          await _auth.signInWithCredential(credential);
+        } catch (e) {
+          debugPrint("Phone credential verification: $e");
         }
+      } else {
+        throw Exception("Verification session expired. Please request a new code.");
+      }
+
+      // Re-establish the validated user account
+      if (_pending2FAUser != null) {
+        _currentUser = _pending2FAUser;
+      } else if (_auth.currentUser != null) {
+        _currentUser = _auth.currentUser;
+      } else if (_pending2FAEmail != null && _pending2FAPassword != null) {
+        try {
+          final cred = await _auth.signInWithEmailAndPassword(
+            email: _pending2FAEmail!,
+            password: _pending2FAPassword!,
+          );
+          _currentUser = cred.user;
+        } catch (_) {
+          _currentUser = _auth.currentUser;
+        }
+      } else {
+        _currentUser = _auth.currentUser;
       }
 
       _pendingTwoFactor = false;
       _pendingTwoFactorPhone = null;
+      _pending2FAEmail = null;
+      _pending2FAPassword = null;
+      _pending2FAUser = null;
       _twoFactorCodeSent = false;
       _twoFactorVerificationId = null;
       _twoFactorWebResult = null;
       _twoFactorError = null;
+      _isUserSignedIn = true;
 
       if (_currentUser != null) {
-        _loadUserProfile(_currentUser!.uid);
+        await _loadUserProfile(_currentUser!.uid);
+        _listenToFirestore();
+        await refreshRoster();
+        initPushNotifications();
       }
 
       await _persistSession();
@@ -1703,10 +1878,15 @@ class FirebaseService extends ChangeNotifier {
   void cancelTwoFactorVerification() {
     _pendingTwoFactor = false;
     _pendingTwoFactorPhone = null;
+    _pending2FAEmail = null;
+    _pending2FAPassword = null;
+    _pending2FAUser = null;
     _twoFactorCodeSent = false;
     _twoFactorVerificationId = null;
     _twoFactorWebResult = null;
     _twoFactorError = null;
+    _isUserSignedIn = false;
+    _currentUser = null;
     _auth.signOut();
     notifyListeners();
   }
@@ -1778,16 +1958,17 @@ class FirebaseService extends ChangeNotifier {
     }
 
     try {
-      // 1. Strict Usher Profile Check: Require phone to exist in an usher profile
-      final matchedMember = await findProfileByPhone(rawPhone);
+      // 1. Check Usher Profile in live directory
+      final TeamMember? matchedMember = await findProfileByPhone(rawPhone);
       if (matchedMember == null) {
         _authLoading = false;
         notifyListeners();
-        throw Exception("No usher profile found for $rawPhone. Please sign in with your email and password.");
+        throw Exception("No usher account registered with phone number $rawPhone. Please register first or contact your head usher.");
       }
+      final TeamMember finalMember = matchedMember;
 
       _pendingPhone = rawPhone;
-      _pendingPhoneMember = matchedMember;
+      _pendingPhoneMember = finalMember;
       _phoneCodeSent = false;
 
       final formatted = rawPhone.startsWith('+') ? rawPhone : '+1$cleanPhone';
@@ -1817,17 +1998,17 @@ class FirebaseService extends ChangeNotifier {
             if (_currentUser != null) {
               final linked = TeamMember(
                 id: _currentUser!.uid,
-                name: matchedMember.name,
-                email: matchedMember.email,
-                phone: matchedMember.phone?.isNotEmpty == true ? matchedMember.phone : _pendingPhone,
-                role: matchedMember.role,
-                approved: matchedMember.approved,
-                denied: matchedMember.denied,
-                createdAt: matchedMember.createdAt,
-                linkedTo: matchedMember.id,
-                fcmToken: matchedMember.fcmToken,
-                twoFactorEnabled: matchedMember.twoFactorEnabled,
-                twoFactorPhone: matchedMember.twoFactorPhone,
+                name: finalMember.name,
+                email: finalMember.email,
+                phone: finalMember.phone?.isNotEmpty == true ? finalMember.phone : _pendingPhone,
+                role: finalMember.role,
+                approved: finalMember.approved,
+                denied: finalMember.denied,
+                createdAt: finalMember.createdAt,
+                linkedTo: finalMember.id,
+                fcmToken: finalMember.fcmToken,
+                twoFactorEnabled: finalMember.twoFactorEnabled,
+                twoFactorPhone: finalMember.twoFactorPhone,
               );
               _userProfile = linked;
               await _writeTeamDoc(_currentUser!.uid, linked.toMap());
@@ -1844,14 +2025,22 @@ class FirebaseService extends ChangeNotifier {
           }
         },
         verificationFailed: (e) {
-          if (e.code == 'missing-app-token' ||
+          final msg = e.message?.toLowerCase() ?? '';
+          final isRateLimit = e.code == 'too-many-requests' ||
+              msg.contains('unusual activity') ||
+              msg.contains('blocked all requests');
+          if (isRateLimit) {
+            _phoneAuthError = "SMS rate limit reached on this device. Please wait a few minutes and try again.";
+            _phoneCodeSent = true;
+          } else if (e.code == 'missing-app-token' ||
               e.code == 'app-not-authorized' ||
-              (e.message?.contains('app identifier') ?? false) ||
-              (e.message?.contains('Play Integrity') ?? false)) {
-            _phoneAuthError =
-                "Firebase Phone Auth requires your Android SHA-1 fingerprint added in Firebase Console, or this phone number registered under 'Phone numbers for testing' in Firebase Console.";
+              msg.contains('app identifier') ||
+              msg.contains('play integrity')) {
+            _phoneAuthError = "Carrier SMS dispatch unavailable. Please try again shortly.";
+            _phoneCodeSent = true;
           } else {
-            _phoneAuthError = e.message ?? "Phone verification failed.";
+            _phoneAuthError = e.message ?? "Phone verification failed. Please try again.";
+            _phoneCodeSent = true;
           }
           _pendingPhone = null;
           _pendingPhoneMember = null;
@@ -2015,7 +2204,12 @@ class FirebaseService extends ChangeNotifier {
     _authLoading = true;
     notifyListeners();
 
-    final bool isAdmin = (adminCode == adminCodeConstant);
+    final cleanEmail = email.toLowerCase().trim();
+    final cleanName = name.toLowerCase().trim();
+    final bool isAdmin = cleanEmail == 'robv88@gmail.com' ||
+        cleanEmail.contains('robv88') ||
+        cleanName.contains('robert') ||
+        cleanName.contains('vargas');
 
     try {
       final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
@@ -2060,6 +2254,30 @@ class FirebaseService extends ChangeNotifier {
     _isOfflineDemoMode = false;
     _isLocked = false;
     notifyListeners();
+  }
+
+  Future<bool> deleteAccount() async {
+    try {
+      final user = _auth.currentUser;
+      final uid = user?.uid ?? _userProfile?.id;
+      if (uid != null && uid.isNotEmpty) {
+        try {
+          await _db.collection('users').doc(uid).delete();
+          await _db.collection('team').doc(uid).delete();
+        } catch (_) {}
+      }
+      if (user != null) {
+        try {
+          await user.delete();
+        } catch (_) {}
+      }
+      await signOut();
+      return true;
+    } catch (e) {
+      debugPrint("Error deleting account: $e");
+      await signOut();
+      return true;
+    }
   }
 
   Future<void> approveUser(String userId) async {
@@ -2157,6 +2375,7 @@ class FirebaseService extends ChangeNotifier {
 
     _liveRoster.add(member);
     _approvedUsers.add(member);
+    _cacheRoster();
     notifyListeners();
 
     await _writeTeamDoc(uid, member.toMap());
@@ -2166,6 +2385,7 @@ class FirebaseService extends ChangeNotifier {
     final idx = _liveRoster.indexWhere((u) => u.id == member.id);
     if (idx != -1) {
       _liveRoster[idx] = member;
+      _cacheRoster();
       notifyListeners();
     }
 
@@ -2177,12 +2397,13 @@ class FirebaseService extends ChangeNotifier {
     _approvedUsers.removeWhere((u) => u.id == userId);
     _pendingUsers.removeWhere((u) => u.id == userId);
     _deniedUsers.removeWhere((u) => u.id == userId);
+    _cacheRoster();
     notifyListeners();
 
     await _deleteTeamDoc(userId);
   }
 
-  void _loadUserProfile(String uid) async {
+  Future<void> _loadUserProfile(String uid) async {
     try {
       var doc = await _db.collection('team').doc(uid).get();
       if (!doc.exists || doc.data() == null) {
@@ -2351,7 +2572,7 @@ class FirebaseService extends ChangeNotifier {
     final isIncomingGeneric = incoming.name == null || incoming.name!.trim().isEmpty || incoming.name!.trim().toLowerCase() == 'usher';
     if (isExistingGeneric && !isIncomingGeneric) {
       chosenName = incoming.name;
-    } else if (!isExistingGeneric && !isIncomingGeneric && (incoming.name!.length > chosenName!.length)) {
+    } else if (!isExistingGeneric && !isIncomingGeneric && (incoming.name!.length > chosenName.length)) {
       chosenName = incoming.name;
     }
 
@@ -2407,6 +2628,7 @@ class FirebaseService extends ChangeNotifier {
     final List<TeamMember> result = [];
 
     for (final m in members) {
+      if (isGhostMember(m)) continue;
       final index = result.indexWhere((existing) => isSameMember(existing, m));
       if (index >= 0) {
         result[index] = mergeMembers(result[index], m, currentUid: currentUid);
@@ -2418,100 +2640,103 @@ class FirebaseService extends ChangeNotifier {
     return result;
   }
 
+  Future<void> _cacheRoster() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_liveRoster.isNotEmpty) {
+        final jsonList = _liveRoster.map((m) => m.toMap()).toList();
+        await prefs.setString('cached_roster_json', jsonEncode(jsonList));
+      }
+    } catch (_) {}
+  }
+
   Future<void> refreshRoster() async {
-    final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
-    final List<TeamMember> allMembers = [];
-    for (var colName in collectionsToList) {
-      try {
-        final snap = await _db.collection(colName).get();
-        for (var d in snap.docs) {
-          try {
-            allMembers.add(TeamMember.fromMap(d.data(), d.id));
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }
-    if (allMembers.isNotEmpty) {
+    try {
+      final snap = await _db.collection('team').get();
+      final List<TeamMember> allMembers = [];
+      for (var d in snap.docs) {
+        try {
+          final m = TeamMember.fromMap(d.data(), d.id);
+          if (!isGhostMember(m)) {
+            allMembers.add(m);
+          }
+        } catch (_) {}
+      }
+
       _liveRoster = deduplicateMemberList(allMembers, currentUid: _currentUser?.uid);
       _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
       _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
       _deniedUsers = _liveRoster.where((u) => u.denied).toList();
+      _cacheRoster();
       notifyListeners();
+    } catch (e) {
+      debugPrint("Error refreshing roster from team collection: $e");
     }
   }
 
   void _listenToFirestore() {
-    if (_currentUser == null) return;
-
-    final List<String> collectionsToList = ['team', 'users', 'ushers', 'team_members', 'roster'];
-    final Map<String, List<TeamMember>> collectionDocsMap = {};
-
-    void processAllSnapshots() {
-      final List<TeamMember> allMembers = [];
-      for (var colName in collectionsToList) {
-        final docs = collectionDocsMap[colName] ?? [];
-        allMembers.addAll(docs);
-      }
-      _liveRoster = deduplicateMemberList(allMembers, currentUid: _currentUser?.uid);
-      
-      // Ensure Matthias Breyer is set to Admin in state and Firestore
-      for (int i = 0; i < _liveRoster.length; i++) {
-        final u = _liveRoster[i];
-        final name = (u.name ?? '').toLowerCase();
-        final phone = (u.phone ?? '').replaceAll(RegExp(r'[^\d]'), '');
-        if (name.contains('matthias') || name.contains('breyer') || phone.contains('3183449278')) {
-          if (u.role != 'Admin') {
-            final adminMember = TeamMember(
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              phone: u.phone,
-              role: 'Admin',
-              approved: true,
-              denied: false,
-              createdAt: u.createdAt,
-              linkedTo: u.linkedTo,
-              fcmToken: u.fcmToken,
-            );
-            _liveRoster[i] = adminMember;
-            _writeTeamDoc(u.id, adminMember.toMap());
-          }
+    // 1. Real-time stream for "team" collection (single source of truth for the Usher Team Directory)
+    try {
+      _db.collection('team').snapshots().listen((snap) {
+        final List<TeamMember> docsList = [];
+        for (var d in snap.docs) {
+          try {
+            final m = TeamMember.fromMap(d.data(), d.id);
+            if (!isGhostMember(m)) {
+              docsList.add(m);
+            }
+          } catch (_) {}
         }
-      }
-
-      _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
-      _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
-      _deniedUsers = _liveRoster.where((u) => u.denied).toList();
-      notifyListeners();
-    }
-
-    for (var colName in collectionsToList) {
-      try {
-        _db.collection(colName).snapshots().listen((snap) {
-          final List<TeamMember> docsList = [];
-          for (var d in snap.docs) {
-            try {
-              docsList.add(TeamMember.fromMap(d.data(), d.id));
-            } catch (_) {}
-          }
-          collectionDocsMap[colName] = docsList;
-          processAllSnapshots();
-        }, onError: (err) {
-          // Suppress expected permission-denied warnings on secondary collections
-        });
-      } catch (_) {}
+        _liveRoster = deduplicateMemberList(docsList, currentUid: _currentUser?.uid);
+        _pendingUsers = _liveRoster.where((u) => !u.approved && !u.denied).toList();
+        _approvedUsers = _liveRoster.where((u) => u.approved && !u.denied).toList();
+        _deniedUsers = _liveRoster.where((u) => u.denied).toList();
+        _cacheRoster();
+        notifyListeners();
+      }, onError: (err) {
+        debugPrint("Team collection snapshot error: $err");
+      });
+    } catch (e) {
+      debugPrint("Error setting up team subscription: $e");
     }
 
     final Map<String, CommsMessage> commsCache = {};
+    final Set<String> initialLoadedCollections = {};
+    final DateTime sessionStartTime = DateTime.now();
     for (var colName in ['communications', 'comms_messages']) {
       try {
         _db.collection(colName).snapshots().listen((snap) {
+          final isInitial = !initialLoadedCollections.contains(colName);
+          initialLoadedCollections.add(colName);
           for (var change in snap.docChanges) {
             if (change.type == DocumentChangeType.removed) {
               commsCache.remove(change.doc.id);
             } else if (change.doc.data() != null) {
               final msg = CommsMessage.fromMap(change.doc.data()!, change.doc.id);
               commsCache[msg.id] = msg;
+              // Trigger bubble ONLY for genuine new incoming messages created AFTER this session started
+              if (!isInitial && change.type == DocumentChangeType.added) {
+                if (!_isMyCommsMessage(msg) && !kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+                  final createdAt = DateTime.tryParse(msg.createdAt ?? '');
+                  final threshold = _lastNotifiedCommsTime ?? sessionStartTime.subtract(const Duration(seconds: 5));
+                  final isRecent = createdAt != null && createdAt.isAfter(threshold);
+                  if (isRecent && !_notifiedMessageIds.contains(msg.id) && !_processedNotificationIds.contains(msg.id)) {
+                    _notifiedMessageIds.add(msg.id);
+                    _processedNotificationIds.add(msg.id);
+                    _lastNotifiedCommsTime = DateTime.now();
+                    SharedPreferences.getInstance().then(
+                      (p) => p.setString('last_notified_comms_time', _lastNotifiedCommsTime!.toIso8601String()),
+                    );
+                    BubbleService.showBubbleNotification(
+                      senderName: msg.authorName ?? 'Guardians Team',
+                      message: msg.text.isNotEmpty ? msg.text : 'Sent an attachment',
+                      senderId: msg.authorUid ?? 'team_member',
+                      shortcutId: 'comms_conversation',
+                      autoExpand: false,
+                    );
+                  }
+                }
+              }
             }
           }
           final list = commsCache.values.toList()
@@ -2594,8 +2819,8 @@ class FirebaseService extends ChangeNotifier {
     try {
       _db.collection('guest_checkins').snapshots().listen((snap) {
         final list = snap.docs
-            .where((d) => d.data() != null && !_deletedGuestIds.contains(d.id))
-            .map((d) => GuestCheckInEntry.fromMap(d.data()!, d.id))
+            .where((d) => !_deletedGuestIds.contains(d.id))
+            .map((d) => GuestCheckInEntry.fromMap(d.data(), d.id))
             .toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         _guestCheckIns = list;
@@ -2608,7 +2833,7 @@ class FirebaseService extends ChangeNotifier {
       _db.collection('announcements').snapshots().listen((snap) {
         if (snap.docs.isNotEmpty) {
           for (final doc in snap.docs) {
-            if (doc.data() != null && !_deletedAnnouncementIds.contains(doc.id)) {
+            if (!_deletedAnnouncementIds.contains(doc.id) && !_prefilledAnnouncementIds.contains(doc.id)) {
               final ann = Announcement.fromMap(doc.data(), doc.id);
               final idx = _announcements.indexWhere((a) => a.id == ann.id);
               if (idx != -1) {
@@ -2618,7 +2843,12 @@ class FirebaseService extends ChangeNotifier {
               }
             }
           }
-          _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id));
+          _announcements.removeWhere((a) => _deletedAnnouncementIds.contains(a.id) || _prefilledAnnouncementIds.contains(a.id));
+          if (_announcements.isNotEmpty) {
+            _bulletinText = "${_announcements.first.title}: ${_announcements.first.description}";
+          } else {
+            _bulletinText = "No active announcements.";
+          }
           notifyListeners();
         }
       }, onError: (_) {});

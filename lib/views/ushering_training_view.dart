@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/training_module.dart';
 import '../theme/app_theme.dart';
+import '../widgets/station_duties_sheet.dart';
 import 'book_reader_view.dart';
 
 class UsheringTrainingView extends StatefulWidget {
@@ -123,6 +124,11 @@ class _UsheringTrainingViewState extends State<UsheringTrainingView>
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
+          IconButton(
+            tooltip: "Station Duties Guide",
+            icon: const Icon(LucideIcons.clipboardCheck),
+            onPressed: () => StationDutiesSheet.show(context),
+          ),
           IconButton(
             tooltip: "Read Handbook in App",
             icon: const Icon(LucideIcons.bookOpen),
@@ -298,10 +304,27 @@ class _UsheringTrainingViewState extends State<UsheringTrainingView>
                         ),
                         icon: const Icon(LucideIcons.bookOpen, size: 16),
                         label: Text(
-                          "Read Full In-App Handbook",
+                          "Read Handbook",
                           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12.5),
                         ),
                         onPressed: () => _openInAppReader(0),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white70, width: 1.2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        icon: const Icon(LucideIcons.clipboardCheck, size: 16, color: Colors.white),
+                        label: Text(
+                          "Station Duties",
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12.5),
+                        ),
+                        onPressed: () => StationDutiesSheet.show(context),
                       ),
                     ),
                   ],

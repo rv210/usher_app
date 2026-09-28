@@ -22,6 +22,28 @@ class Announcement {
     this.createdAt,
   });
 
+  Announcement copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? date,
+    String? category,
+    String? iconName,
+    String? authorName,
+    DateTime? createdAt,
+  }) {
+    return Announcement(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      date: date ?? this.date,
+      category: category ?? this.category,
+      iconName: iconName ?? this.iconName,
+      authorName: authorName ?? this.authorName,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   IconData get icon {
     switch (category.toLowerCase()) {
       case 'usher meeting':
@@ -103,47 +125,4 @@ class Announcement {
   }
 }
 
-const List<Announcement> kDefaultAnnouncements = [
-  Announcement(
-    id: 'ann_1',
-    title: 'Quarterly Usher Team Briefing',
-    description: 'Mandatory usher meeting this Sunday at 8:15 AM in Conference Room B for station assignments and training review.',
-    date: 'May 18, 2025',
-    category: 'Usher Meeting',
-  ),
-  Announcement(
-    id: 'ann_2',
-    title: 'Night of Worship & Prayer',
-    description: 'Join the entire church family for an evening of acoustic worship, intercession, and communion at 7:00 PM.',
-    date: 'May 14, 2025',
-    category: 'Worship Night',
-  ),
-  Announcement(
-    id: 'ann_3',
-    title: 'Wednesday Evening Bible Study',
-    description: 'Walking through the Book of Romans chapter 8. Bring your study bibles and journals. Sanctuary East Wing.',
-    date: 'May 10, 2025',
-    category: 'Bible Study',
-  ),
-  Announcement(
-    id: 'ann_4',
-    title: 'Community Food Drive Outreach',
-    description: 'Partnering with the city shelter for our seasonal grocery distribution. Volunteer slots open Saturday 9 AM.',
-    date: 'May 03, 2025',
-    category: 'Community Outreach',
-  ),
-  Announcement(
-    id: 'ann_5',
-    title: 'New Member Orientation Class',
-    description: 'Learn more about church membership, ministry leadership, and ways to get connected. Starts at 1:30 PM.',
-    date: 'Apr 27, 2025',
-    category: 'New Member Class',
-  ),
-  Announcement(
-    id: 'ann_6',
-    title: 'Volunteer Appreciation Sunday',
-    description: 'Celebrating all our dedicated usher and greeter servants after 2nd service with refreshments in Fellowship Hall.',
-    date: 'Apr 20, 2025',
-    category: 'Volunteer Appreciation',
-  ),
-];
+const List<Announcement> kDefaultAnnouncements = [];

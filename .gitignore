@@ -44,14 +44,20 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Environment Secrets
+# Environment Secrets & Keystores
 .env
 .env.local
 .env.*
 !.env.example
+key.properties
+*.keystore
+*.jks
 
 # Showcase Artifacts
 app_store_showcase.html
 login_landing.png
 phone_*.png
-
+scratch/
+# Firebase local cache
+.firebase/
+functions/check_db.js

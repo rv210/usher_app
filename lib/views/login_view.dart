@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,6 +31,9 @@ class _LoginViewState extends State<LoginView> {
 
   final _smsCodeController = TextEditingController();
 
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
+
   bool _usePhoneLogin = false;
   bool _showPassword = false;
   bool _showConfirmPassword = false;
@@ -42,6 +46,8 @@ class _LoginViewState extends State<LoginView> {
   @override
   void initState() {
     super.initState();
+    _termsRecognizer = TapGestureRecognizer()..onTap = () => _showTermsOfService(context);
+    _privacyRecognizer = TapGestureRecognizer()..onTap = () => _showPrivacyPolicy(context);
     _isRegister = widget.initialMode == 'register';
     _showLanding = widget.initialMode != 'register' && widget.initialMode != 'login_form';
   }
@@ -49,7 +55,6 @@ class _LoginViewState extends State<LoginView> {
   FirebaseService? _firebaseService;
   String _biometricLabel = "Biometric";
   IconData _biometricIcon = LucideIcons.fingerprint;
-  bool _hasSavedBiometricCreds = false;
 
   @override
   void didChangeDependencies() {
@@ -68,9 +73,6 @@ class _LoginViewState extends State<LoginView> {
 
     _firebaseService!.getBiometricCredentials().then((creds) {
       if (mounted && creds != null && creds['email'] != null) {
-        setState(() {
-          _hasSavedBiometricCreds = true;
-        });
         if (_emailController.text.isEmpty) {
           _emailController.text = creds['email']!;
         }
@@ -102,6 +104,8 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     _firebaseService?.cancelPhoneVerification();
     _emailController.dispose();
     _passwordController.dispose();
@@ -203,23 +207,43 @@ class _LoginViewState extends State<LoginView> {
     final isPhoneOnly = !input.contains('@') && digitsOnly.length >= 7;
 
     if (isPhoneOnly) {
-      try {
-        final profile = await firebaseService.findProfileByPhone(input);
-        if (profile != null && profile.email != null && profile.email!.contains('@') && password.isNotEmpty) {
-          final success = await firebaseService.signIn(profile.email!, password);
-          if (!success) return; // 2FA SMS challenge required
-          await firebaseService.saveBiometricCredentials(profile.email!, password);
-          if (mounted) await _checkAndPromptFingerprint(firebaseService);
-          return;
-        } else {
-          // Send SMS verification code to phone
-          await firebaseService.sendPhoneSecurityCode(input);
+      if (password.isEmpty) {
+        // Allow passwordless phone SMS authentication for users and testers
+        try {
           setState(() {
             _usePhoneLogin = true;
-            _phoneController.text = input;
+            _errorMessage = null;
           });
-          return;
+          await firebaseService.sendPhoneSecurityCode(input);
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _errorMessage = e.toString().replaceAll('Exception: ', '').trim());
         }
+        return;
+      }
+      // Look up the account email linked to this phone number, then sign in
+      // using standard email+password. This ensures 2FA (if enabled) is properly
+      // triggered — the raw phone auth SMS path bypassed the 2FA challenge entirely.
+      try {
+        final profile = await firebaseService.findProfileByPhone(input);
+        if (profile != null && (profile.email?.contains('@') ?? false)) {
+          final success = await firebaseService.signIn(profile.email!, password);
+          if (!success) return; // 2FA SMS challenge displayed — wait for code
+          await firebaseService.saveBiometricCredentials(profile.email!, password);
+          if (mounted) await _checkAndPromptFingerprint(firebaseService);
+        } else {
+          // If no linked email found, initiate direct phone SMS sign-in
+          try {
+            setState(() {
+              _usePhoneLogin = true;
+              _errorMessage = null;
+            });
+            await firebaseService.sendPhoneSecurityCode(input);
+          } catch (e) {
+            setState(() => _errorMessage = e.toString().replaceAll('Exception: ', '').trim());
+          }
+        }
+        return;
       } catch (e) {
         if (!mounted) return;
         setState(() => _errorMessage = e.toString().replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception: ', '').trim());
@@ -239,7 +263,7 @@ class _LoginViewState extends State<LoginView> {
         return;
       }
 
-      // Save credentials for instant biometric fingerprint unlock
+      // Save credentials securely in Keystore for fast biometric unlock
       await firebaseService.saveBiometricCredentials(input, password);
 
       if (mounted) {
@@ -359,9 +383,9 @@ class _LoginViewState extends State<LoginView> {
                   if (success) {
                     await firebaseService.setBiometricEnabled(true);
                     final email = _emailController.text.trim();
-                    final password = _passwordController.text.trim();
-                    if (email.isNotEmpty && password.isNotEmpty) {
-                      await firebaseService.saveBiometricCredentials(email, password);
+                    final pass = _passwordController.text.trim();
+                    if (email.isNotEmpty) {
+                      await firebaseService.saveBiometricCredentials(email, pass.isNotEmpty ? pass : null);
                     }
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -415,7 +439,7 @@ class _LoginViewState extends State<LoginView> {
     }
 
     if (_showLanding) {
-      return _buildLandingView(context);
+      return _buildLandingView(context, firebaseService);
     }
 
     if (_isRegister) {
@@ -426,15 +450,28 @@ class _LoginViewState extends State<LoginView> {
   }
 
   Widget _buildSignInView(BuildContext context, FirebaseService firebaseService) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF090D16) : const Color(0xFFF5F7FA);
+    final fieldBg = isDark ? const Color(0xFF131926) : Colors.white;
+    final fieldBorder = isDark ? const Color(0xFF243046) : const Color(0xFFDDE2EA);
+    final iconColor = isDark ? const Color(0xFF7E8B9F) : const Color(0xFF8899AA);
+    final hintColor = isDark ? const Color(0xFF5E6B80) : const Color(0xFFADB5BD);
+    final labelColor = isDark ? Colors.white : const Color(0xFF1A2233);
+    final subtitleColor = isDark ? const Color(0xFF8E9BAE) : const Color(0xFF5A6475);
+    final checkboxBorder = isDark ? const Color(0xFF3B4860) : const Color(0xFFBBCAD8);
+    final dividerColor = isDark ? const Color(0xFF243046) : const Color(0xFFDDE2EA);
+    final biometricBg = isDark ? const Color(0xFF131926) : Colors.white;
+    final biometricBorder = isDark ? const Color(0xFF243046) : const Color(0xFFDDE2EA);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
+      backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: Colors.white, size: 24),
+          icon: Icon(LucideIcons.chevronLeft, color: isDark ? Colors.white : const Color(0xFF1A2233), size: 24),
           tooltip: "Back to Welcome",
           onPressed: () {
             HapticFeedback.lightImpact();
@@ -511,7 +548,7 @@ class _LoginViewState extends State<LoginView> {
                 style: GoogleFonts.outfit(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: labelColor,
                 ),
               ),
               const SizedBox(height: 6),
@@ -519,7 +556,7 @@ class _LoginViewState extends State<LoginView> {
                 "Welcome back! Please sign in to continue.",
                 style: GoogleFonts.inter(
                   fontSize: 14,
-                  color: const Color(0xFF8E9BAE),
+                  color: subtitleColor,
                 ),
               ),
 
@@ -552,23 +589,24 @@ class _LoginViewState extends State<LoginView> {
               if (_usePhoneLogin && firebaseService.phoneCodeSent) ...[
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131926),
+                    color: fieldBg,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF243046), width: 1),
+                    border: Border.all(color: fieldBorder, width: 1),
+                    boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: TextField(
                     controller: _smsCodeController,
                     keyboardType: TextInputType.number,
                     maxLength: 6,
-                    style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, letterSpacing: 6, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.outfit(color: labelColor, fontSize: 20, letterSpacing: 6, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       counterText: "",
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      prefixIcon: const Icon(LucideIcons.messageSquare, color: Color(0xFF7E8B9F), size: 18),
-                      hintText: "123456",
-                      hintStyle: GoogleFonts.outfit(color: const Color(0xFF5E6B80), fontSize: 18, letterSpacing: 4),
+                      prefixIcon: Icon(LucideIcons.messageSquare, color: iconColor, size: 18),
+                      hintText: "000000",
+                      hintStyle: GoogleFonts.outfit(color: hintColor, fontSize: 18, letterSpacing: 4),
                     ),
                   ),
                 ),
@@ -599,20 +637,21 @@ class _LoginViewState extends State<LoginView> {
                 // Email or Phone Number
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131926),
+                    color: fieldBg,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF243046), width: 1),
+                    border: Border.all(color: fieldBorder, width: 1),
+                    boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    style: GoogleFonts.inter(color: labelColor, fontSize: 14),
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      prefixIcon: const Icon(LucideIcons.mail, color: Color(0xFF7E8B9F), size: 18),
+                      prefixIcon: Icon(LucideIcons.mail, color: iconColor, size: 18),
                       hintText: "Email or Phone Number",
-                      hintStyle: GoogleFonts.inter(color: const Color(0xFF5E6B80), fontSize: 14),
+                      hintStyle: GoogleFonts.inter(color: hintColor, fontSize: 14),
                     ),
                   ),
                 ),
@@ -622,28 +661,29 @@ class _LoginViewState extends State<LoginView> {
                 // Password
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF131926),
+                    color: fieldBg,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF243046), width: 1),
+                    border: Border.all(color: fieldBorder, width: 1),
+                    boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
                   child: TextField(
                     controller: _passwordController,
                     obscureText: !_showPassword,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    style: GoogleFonts.inter(color: labelColor, fontSize: 14),
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      prefixIcon: const Icon(LucideIcons.lock, color: Color(0xFF7E8B9F), size: 18),
+                      prefixIcon: Icon(LucideIcons.lock, color: iconColor, size: 18),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _showPassword ? LucideIcons.eyeOff : LucideIcons.eye,
-                          color: const Color(0xFF7E8B9F),
+                          color: iconColor,
                           size: 18,
                         ),
                         onPressed: () => setState(() => _showPassword = !_showPassword),
                       ),
                       hintText: "Password",
-                      hintStyle: GoogleFonts.inter(color: const Color(0xFF5E6B80), fontSize: 14),
+                      hintStyle: GoogleFonts.inter(color: hintColor, fontSize: 14),
                     ),
                   ),
                 ),
@@ -664,7 +704,7 @@ class _LoginViewState extends State<LoginView> {
                             value: _rememberMe,
                             activeColor: const Color(0xFFE5BC6A),
                             checkColor: const Color(0xFF161208),
-                            side: const BorderSide(color: Color(0xFF3B4860), width: 1.5),
+                            side: BorderSide(color: checkboxBorder, width: 1.5),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                             onChanged: (val) => setState(() => _rememberMe = val ?? true),
                           ),
@@ -674,7 +714,7 @@ class _LoginViewState extends State<LoginView> {
                           "Remember me",
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: const Color(0xFFCAD1DC),
+                            color: subtitleColor,
                           ),
                         ),
                       ],
@@ -751,21 +791,21 @@ class _LoginViewState extends State<LoginView> {
               // Divider: "────── or ──────"
               Row(
                 children: [
-                  const Expanded(child: Divider(color: Color(0xFF243046), thickness: 1)),
+                  Expanded(child: Divider(color: dividerColor, thickness: 1)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       "or",
-                      style: GoogleFonts.inter(color: const Color(0xFF7E8B9F), fontSize: 13),
+                      style: GoogleFonts.inter(color: iconColor, fontSize: 13),
                     ),
                   ),
-                  const Expanded(child: Divider(color: Color(0xFF243046), thickness: 1)),
+                  Expanded(child: Divider(color: dividerColor, thickness: 1)),
                 ],
               ),
 
               const SizedBox(height: 20),
 
-              // Biometric Sign In button (Replaces "Sign in with Google")
+              // Biometric Sign In button
               Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -775,12 +815,12 @@ class _LoginViewState extends State<LoginView> {
                     width: double.infinity,
                     height: 54,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF131926),
+                      color: biometricBg,
                       borderRadius: BorderRadius.circular(27),
-                      border: Border.all(color: const Color(0xFF243046), width: 1.2),
+                      border: Border.all(color: biometricBorder, width: 1.2),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
+                          color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -807,7 +847,7 @@ class _LoginViewState extends State<LoginView> {
                                   style: GoogleFonts.outfit(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                    color: labelColor,
                                     letterSpacing: 0.2,
                                   ),
                                 ),
@@ -828,7 +868,7 @@ class _LoginViewState extends State<LoginView> {
                     "Don't have an account? ",
                     style: GoogleFonts.inter(
                       fontSize: 14,
-                      color: const Color(0xFF8E9BAE),
+                      color: subtitleColor,
                     ),
                   ),
                   GestureDetector(
@@ -958,17 +998,6 @@ class _LoginViewState extends State<LoginView> {
 
               const SizedBox(height: 14),
 
-              // Church / Ministry
-              _buildLightInputField(
-                controller: _ministryController,
-                icon: LucideIcons.church,
-                hintText: "Church / Ministry",
-                suffixIcon: LucideIcons.chevronDown,
-                onTapSuffix: () => _selectMinistry(context),
-              ),
-
-              const SizedBox(height: 14),
-
               // Password
               _buildLightInputField(
                 controller: _passwordController,
@@ -1017,19 +1046,23 @@ class _LoginViewState extends State<LoginView> {
                         children: [
                           TextSpan(
                             text: "Terms of Service",
+                            recognizer: _termsRecognizer,
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: const Color(0xFFC79540),
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                           const TextSpan(text: " and "),
                           TextSpan(
                             text: "Privacy Policy",
+                            recognizer: _privacyRecognizer,
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: const Color(0xFFC79540),
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                         ],
@@ -1180,52 +1213,330 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  void _selectMinistry(BuildContext context) {
-    final options = [
-      "Guardians of the Gate",
-      "Vestibule Ushers",
-      "Main Sanctuary",
-      "Hospitality Ministry",
-      "Youth & Children",
-      "Special Events",
-    ];
-
+  void _showTermsOfService(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC79540).withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(LucideIcons.fileText, color: Color(0xFFC79540), size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Terms of Service",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1E2432),
+                                ),
+                              ),
+                              Text(
+                                "Last Updated: September 2026",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.x, size: 20, color: Color(0xFF64748B)),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFFF1F5F9), height: 1),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          _buildLegalClause(
+                            number: "1",
+                            title: "Acceptance of Terms",
+                            content:
+                                "By registering for or utilizing the Church Usher Application (\"Usher App\"), you agree to be bound by these Terms of Service and all related church ministry protocols and codes of conduct.",
+                          ),
+                          _buildLegalClause(
+                            number: "2",
+                            title: "Intended Ministry Purpose",
+                            content:
+                                "This platform is provided exclusively for church ushers, ministry coordinators, and pastoral staff to facilitate station assignments (Main Sanctuary, Vestibule, Signs/Bathroom, Petitions), interactive supply checklists, and congregation attendance headcounts.",
+                          ),
+                          _buildLegalClause(
+                            number: "3",
+                            title: "Account Integrity & Security",
+                            content:
+                                "You are responsible for safeguarding your login credentials. Accurate personal information (full name, email, and phone number) must be provided for team authentication and operational security notifications.",
+                          ),
+                          _buildLegalClause(
+                            number: "4",
+                            title: "Ministry Communications",
+                            content:
+                                "Active account holders consent to receive vital service rosters, station sub-in alerts, emergency broadcast notices, and verification codes via push notification and operational messaging.",
+                          ),
+                          _buildLegalClause(
+                            number: "5",
+                            title: "Administrative Oversight",
+                            content:
+                                "Ministry roles (Usher, Lead, Admin) are maintained by church leadership. Church administrators retain the prerogative to approve, modify, or revoke system permissions in accordance with ministry guidelines.",
+                          ),
+                          _buildLegalClause(
+                            number: "6",
+                            title: "Limitation of Liability",
+                            content:
+                                "The application is provided \"as is\" without warranty of any kind. The ministry is not liable for carrier SMS delivery delays, local device outages, or schedule miscommunications.",
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC79540),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text("I Understand & Agree", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showPrivacyPolicy(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(LucideIcons.shieldCheck, color: Color(0xFF2563EB), size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Privacy Policy",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1E2432),
+                                ),
+                              ),
+                              Text(
+                                "Last Updated: September 2026",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.x, size: 20, color: Color(0xFF64748B)),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFFF1F5F9), height: 1),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        physics: const BouncingScrollPhysics(),
+                        children: [
+                          _buildLegalClause(
+                            number: "1",
+                            title: "Information Collected",
+                            content:
+                                "We collect user registration details (full name, email address, phone number), duty deployment assignments, and service attendance tallies necessary to fulfill church operations.",
+                          ),
+                          _buildLegalClause(
+                            number: "2",
+                            title: "How We Use Information",
+                            content:
+                                "Data is used strictly to coordinate usher schedules, authenticate user sign-ins (including two-step SMS verification), maintain historical headcount logs, and dispatch critical station announcements.",
+                          ),
+                          _buildLegalClause(
+                            number: "3",
+                            title: "Zero Selling of Personal Data",
+                            content:
+                                "Your personal data is strictly protected. We do not sell, rent, monetize, or disclose your contact information to third-party marketing companies, advertisers, or data brokers.",
+                          ),
+                          _buildLegalClause(
+                            number: "4",
+                            title: "Data Encryption & Security",
+                            content:
+                                "All communications with backend servers are encrypted in transit via SSL/TLS and stored securely within Google Firebase cloud infrastructure with strict role-based access rules.",
+                          ),
+                          _buildLegalClause(
+                            number: "5",
+                            title: "Member Data Privacy",
+                            content:
+                                "Congregation and team member contact details in the directory are restricted to verified ministry staff and ushers for church service operations, coordination, and emergency response.",
+                          ),
+                          _buildLegalClause(
+                            number: "6",
+                            title: "Your Rights & Account Deletion",
+                            content:
+                                "You possess the right to inspect, correct, or request the permanent deletion of your account and personal records at any time through the in-app Settings portal or by contacting church administration.",
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text("Understood", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLegalClause({required String number, required String title, required String content}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              number,
+              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF475569)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    "Select Ministry / Station",
-                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF1E2432)),
-                  ),
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF1E2432)),
                 ),
-                const SizedBox(height: 12),
-                ...options.map((opt) => ListTile(
-                      title: Text(opt, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500, color: const Color(0xFF1E2432))),
-                      trailing: _ministryController.text == opt
-                          ? const Icon(LucideIcons.check, color: Color(0xFFC79540))
-                          : null,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      onTap: () {
-                        setState(() => _ministryController.text = opt);
-                        Navigator.pop(ctx);
-                      },
-                    )),
+                const SizedBox(height: 4),
+                Text(
+                  content,
+                  style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: const Color(0xFF475569)),
+                ),
               ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -1316,11 +1627,18 @@ class _LoginViewState extends State<LoginView> {
   }
 
   Widget _buildTwoFactorScreen(BuildContext context, FirebaseService firebaseService) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final phone = firebaseService.pendingTwoFactorPhone ?? 'your registered phone';
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
     final maskedPhone = cleanPhone.length >= 4
         ? '***-***-${cleanPhone.substring(cleanPhone.length - 4)}'
         : phone;
+    final rawErr = _errorMessage ?? firebaseService.twoFactorError;
+    final isRateLimit = rawErr != null &&
+        (rawErr.toLowerCase().contains('blocked') ||
+            rawErr.toLowerCase().contains('unusual activity') ||
+            rawErr.toLowerCase().contains('too-many-requests') ||
+            rawErr.toLowerCase().contains('rate limit'));
 
     return Scaffold(
       appBar: AppBar(
@@ -1377,26 +1695,51 @@ class _LoginViewState extends State<LoginView> {
                 ),
               ),
               const SizedBox(height: 28),
-              if (_errorMessage != null || firebaseService.twoFactorError != null) ...[
+              if (rawErr != null) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.12),
+                    color: (isRateLimit ? Colors.amber : AppColors.danger).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                    border: Border.all(color: (isRateLimit ? Colors.amber : AppColors.danger).withValues(alpha: 0.35)),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(LucideIcons.alertTriangle, color: AppColors.danger, size: 18),
+                      Icon(
+                        isRateLimit ? LucideIcons.shieldAlert : LucideIcons.alertTriangle,
+                        color: isRateLimit ? (isDark ? Colors.amber[300] : Colors.amber[800]) : AppColors.danger,
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          _errorMessage ?? firebaseService.twoFactorError!,
-                          style: GoogleFonts.inter(
-                            color: AppColors.danger,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isRateLimit
+                                  ? "Carrier SMS Rate Limit Reached"
+                                  : rawErr,
+                              style: GoogleFonts.inter(
+                                color: isRateLimit
+                                    ? (isDark ? Colors.amber[300] : Colors.amber[900])
+                                    : AppColors.danger,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (isRateLimit) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                "Carrier SMS quota has been reached. Please wait a few moments before requesting another code.",
+                                style: GoogleFonts.inter(
+                                  color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
@@ -1430,12 +1773,12 @@ class _LoginViewState extends State<LoginView> {
                       ),
                       maxLength: 6,
                       decoration: const InputDecoration(
-                        hintText: "123456",
+                        hintText: "000000",
                         counterText: "",
                         prefixIcon: Icon(LucideIcons.key, size: 18),
                       ),
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 18),
                     DribbbleGlowButton(
                       label: "Verify & Sign In",
                       icon: LucideIcons.shieldCheck,
@@ -1514,7 +1857,7 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  Widget _buildLandingView(BuildContext context) {
+  Widget _buildLandingView(BuildContext context, FirebaseService firebaseService) {
     return Scaffold(
       backgroundColor: const Color(0xFF090A0D),
       body: Stack(
@@ -1653,6 +1996,67 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ),
                     ),
+
+                    if (firebaseService.biometricEnabled) ...[
+                      const SizedBox(height: 14),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(28),
+                          onTap: _unlockAttempting ? null : _attemptBiometricUnlock,
+                          child: Ink(
+                            width: double.infinity,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF131926).withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: const Color(0xFF243046),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: _unlockAttempting
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFFE5BC6A),
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _biometricIcon,
+                                          size: 20,
+                                          color: const Color(0xFFE5BC6A),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          "Sign In with $_biometricLabel",
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

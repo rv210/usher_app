@@ -45,14 +45,15 @@ object BubbleNotificationManager {
         messageText: String,
         senderId: String = "team_lead",
         shortcutId: String = "comms_conversation",
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
+        autoExpand: Boolean = false
     ) {
         // Ensure notification channel is created
         createNotificationChannel(context)
 
         val appIcon = IconCompat.createWithResource(context, R.mipmap.ic_launcher)
 
-        // 1. Sender Person
+        // 1. Sender Person (Required for Android 11+ conversation space)
         val senderPerson = Person.Builder()
             .setName(senderName)
             .setKey(senderId)
@@ -69,7 +70,7 @@ object BubbleNotificationManager {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
-        // 3. Register long-lived dynamic shortcut for Android 11+ conversation space
+        // 3. Register long-lived dynamic shortcut with category for Android 11+ conversation space
         val shortcut = ShortcutInfoCompat.Builder(context, shortcutId)
             .setLocusId(LocusIdCompat(shortcutId))
             .setActivity(ComponentName(context, BubbleActivity::class.java))
@@ -79,11 +80,12 @@ object BubbleNotificationManager {
             .setIcon(appIcon)
             .setPerson(senderPerson)
             .setIntent(bubbleActivityIntent)
+            .setCategories(setOf("androidx.core.content.pm.SHORTCUT_CATEGORY_CONVERSATION", NotificationCompat.CATEGORY_MESSAGE))
             .build()
 
         ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
 
-        // 4. PendingIntent for the Bubble
+        // 4. PendingIntent for the Bubble (FLAG_MUTABLE required on Android 12+)
         val bubblePendingIntent = PendingIntent.getActivity(
             context,
             shortcutId.hashCode(),
@@ -102,6 +104,9 @@ object BubbleNotificationManager {
             Intent(context, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 putExtra("route", "/comms")
+                putExtra("target_tab", 4)
+                putExtra("target_action", "comms")
+                putExtra("type", "comms")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             },
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -111,22 +116,12 @@ object BubbleNotificationManager {
             }
         )
 
-        // 6. Construct BubbleMetadata
-        val bubbleMetadata = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+ (API 30+) recommended constructor with shortcutId
-            NotificationCompat.BubbleMetadata.Builder(shortcutId)
-                .setDesiredHeight(600)
-                .setAutoExpandBubble(true)
-                .setSuppressNotification(false)
-                .build()
-        } else {
-            // Android 10 (API 29) fallback constructor with PendingIntent
-            NotificationCompat.BubbleMetadata.Builder(bubblePendingIntent, appIcon)
-                .setDesiredHeight(600)
-                .setAutoExpandBubble(true)
-                .setSuppressNotification(false)
-                .build()
-        }
+        // 6. Construct BubbleMetadata adhering to Android Developers documentation
+        val bubbleMetadata = NotificationCompat.BubbleMetadata.Builder(bubblePendingIntent, appIcon)
+            .setDesiredHeight(600)
+            .setAutoExpandBubble(autoExpand)
+            .setSuppressNotification(autoExpand)
+            .build()
 
         // 7. MessagingStyle conversation
         val currentUser = Person.Builder()
@@ -157,6 +152,7 @@ object BubbleNotificationManager {
             .setStyle(messagingStyle)
             .setBubbleMetadata(bubbleMetadata)
             .setContentIntent(contentIntent)
+            .addPerson(senderPerson)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("guardians_comms_group")
             .setAutoCancel(true)

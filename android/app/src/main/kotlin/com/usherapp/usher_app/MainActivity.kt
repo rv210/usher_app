@@ -18,6 +18,19 @@ class MainActivity : FlutterFragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
             
+            // Primary High Importance Channel (Native Push Notifications)
+            val highImportanceChannel = NotificationChannel(
+                "high_importance_channel",
+                "Guardians Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Urgent notifications for team comms, shift callouts, and station updates"
+                enableVibration(true)
+                enableLights(true)
+                setShowBadge(true)
+            }
+            manager?.createNotificationChannel(highImportanceChannel)
+
             // 1. Station & Duty Alerts Channel (Urgent / Heads-up)
             val dutyChannel = NotificationChannel(
                 "duty_alerts_channel",
@@ -56,6 +69,7 @@ class MainActivity : FlutterFragmentActivity() {
                     val message = call.argument<String>("message") ?: ""
                     val senderId = call.argument<String>("senderId") ?: "team_lead"
                     val shortcutId = call.argument<String>("shortcutId") ?: "comms_conversation"
+                    val autoExpand = call.argument<Boolean>("autoExpand") ?: false
 
                     try {
                         BubbleNotificationManager.showBubbleNotification(
@@ -63,7 +77,8 @@ class MainActivity : FlutterFragmentActivity() {
                             senderName = senderName,
                             messageText = message,
                             senderId = senderId,
-                            shortcutId = shortcutId
+                            shortcutId = shortcutId,
+                            autoExpand = autoExpand
                         )
                         result.success(true)
                     } catch (e: Exception) {
@@ -115,6 +130,10 @@ class MainActivity : FlutterFragmentActivity() {
                         if (intent?.hasExtra("target_action") == true) {
                             initialData["target_action"] = intent.getStringExtra("target_action") ?: ""
                         }
+                        if (intent?.getStringExtra("route") == "/comms" || intent?.getStringExtra("type") == "comms") {
+                            initialData["target_tab"] = 4
+                            initialData["target_action"] = "comms"
+                        }
                         result.success(initialData)
                     }
                     else -> result.notImplemented()
@@ -122,7 +141,7 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        // Check if intent launched with widget deep links
+        // Check if intent launched with widget deep links or notification intents
         handleWidgetIntent(intent)
     }
 
@@ -142,6 +161,11 @@ class MainActivity : FlutterFragmentActivity() {
         }
         if (intent.hasExtra("target_action")) {
             map["target_action"] = intent.getStringExtra("target_action") ?: ""
+            hasData = true
+        }
+        if (intent.getStringExtra("route") == "/comms" || intent.getStringExtra("type") == "comms") {
+            map["target_tab"] = 4
+            map["target_action"] = "comms"
             hasData = true
         }
         if (hasData) {

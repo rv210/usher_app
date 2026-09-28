@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guardians of the Gate — Church Usher Ministry</title>
+  <meta name="description" content="Guardians of the Gate church usher ministry management platform.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --gold: #e5bc6a;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 48px 36px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(229, 188, 106, 0.12);
+      border: 1px solid rgba(229, 188, 106, 0.3);
+      border-radius: 999px;
+      color: var(--gold);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #e5bc6a, #c49746);
+      color: #0c0e14;
+      font-weight: 700;
+      padding: 14px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: 0.95rem;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .nav-links {
+      margin-top: 32px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      font-size: 0.9rem;
+    }
+    .nav-links a {
+      color: var(--gold);
+      text-decoration: none;
+    }
+    .nav-links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Church Usher Ministry Platform</div>
+    <h1>Guardians of the Gate</h1>
+    <p>Empowering church ushers and ministry leaders with real-time station duties, sanctuary headcount tallies, and dispatch communications.</p>
+    <a href="/privacy" class="btn">View Privacy Policy</a>
+    <div class="nav-links">
+      <a href="/privacy">Privacy Policy</a>
+      <span style="color: var(--border);">&bull;</span>
+      <a href="/delete-account">Delete Account</a>
+      <span style="color: var(--border);">&bull;</span>
+      <a href="mailto:guardiansgates26@gmail.com">Contact Support (guardiansgates26@gmail.com)</a>
+    </div>
+  </div>
+</body>
+</html>

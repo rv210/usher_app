@@ -4,8 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import '../models/guest_check_in.dart';
 import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
 

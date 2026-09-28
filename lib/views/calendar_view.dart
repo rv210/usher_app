@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/team_member.dart';
 import '../models/deployment.dart';
+import '../models/station_duty.dart';
 import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/station_duties_sheet.dart';
 
 class CalendarView extends StatefulWidget {
   final GlobalKey? sundayStripKey;
@@ -93,6 +95,13 @@ class _CalendarViewState extends State<CalendarView> {
       appBar: AppBar(
         title: const Text("Duty Roster & Deployments"),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.clipboardList),
+            tooltip: "Station Duties Guide",
+            onPressed: () {
+              StationDutiesSheet.show(context);
+            },
+          ),
           if (firebaseService.deployments.isNotEmpty)
             IconButton(
               icon: const Icon(LucideIcons.trash2, color: AppColors.danger),
@@ -624,32 +633,69 @@ class _CalendarViewState extends State<CalendarView> {
                                       ),
                                     ],
                                   ),
-                                  InkWell(
-                                    onTap: () => _showSubInDialog(context, firebaseService, dep),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.12),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => StationDutiesSheet.show(
+                                          context,
+                                          initialStationName: dep.station,
+                                          serviceDate: dep.date,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(LucideIcons.userCheck, size: 13, color: AppColors.primary),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            "Sub-In",
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.primary,
-                                            ),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.3)),
                                           ),
-                                        ],
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(LucideIcons.clipboardCheck, size: 13, color: Theme.of(context).primaryColor),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                "Duties",
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Theme.of(context).primaryColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        onTap: () => _showSubInDialog(context, firebaseService, dep),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(LucideIcons.userCheck, size: 13, color: AppColors.primary),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                "Sub-In",
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -861,16 +907,8 @@ class _CalendarViewState extends State<CalendarView> {
       'Head Usher',
     ];
 
-    String selectedStation = 'Sanctuary (Lead Station)';
-    final stations = [
-      'Sanctuary (Lead Station)',
-      'Vestibule/Door Greeter',
-      'Sanctuary Main Floor',
-      'Sanctuary Balcony',
-      'Sign/Bathrooms/Petitions',
-      'WT Breakdown',
-      'Custom...',
-    ];
+    String selectedStation = 'Main Sanctuary';
+    final stations = UsherStationRegistry.standardStationNames;
 
     showDialog(
       context: context,
@@ -987,7 +1025,7 @@ class _CalendarViewState extends State<CalendarView> {
                             selectedMember = val;
                             if (val != null && val.isLead) {
                               selectedRole = 'Lead Usher (Sunday Lead)';
-                              selectedStation = 'Sanctuary (Lead Station)';
+                              selectedStation = 'Main Sanctuary';
                             }
                           });
                         },
@@ -1028,7 +1066,7 @@ class _CalendarViewState extends State<CalendarView> {
                           setModalState(() {
                             selectedRole = val;
                             if (val == 'Lead Usher (Sunday Lead)') {
-                              selectedStation = 'Sanctuary (Lead Station)';
+                              selectedStation = 'Main Sanctuary';
                             }
                           });
                         }

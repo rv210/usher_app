@@ -225,15 +225,18 @@ class _AttendanceViewState extends State<AttendanceView> {
                                         child: FadeTransition(opacity: animation, child: child),
                                       );
                                     },
-                                    child: Text(
-                                      "${firebaseService.currentTallyCount}",
-                                      key: ValueKey<int>(firebaseService.currentTallyCount),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 56,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                        height: 1.0,
-                                        letterSpacing: -1.2,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        "${firebaseService.currentTallyCount}",
+                                        key: ValueKey<int>(firebaseService.currentTallyCount),
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 56,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          height: 1.0,
+                                          letterSpacing: -1.2,
+                                        ),
                                       ),
                                     ),
                                   ),

@@ -19,15 +19,12 @@ interface PushContent {
   data?: Record<string, string>;
 }
 
-// Android gets a data-only message: the client (foreground onMessage AND the
-// background isolate handler) is the sole renderer. If we also set a
-// top-level `notification` block, Android auto-renders it from the system
-// tray whenever the app isn't in a strictly-resumed foreground state, while
-// FlutterFire can *still* route the same message to onMessage in that same
-// ambiguous state (screen locked, app paused-not-stopped, recents view) -
-// producing two banners for one push. Data-only removes the OS's own
-// rendering path entirely, so there is only ever one renderer.
-function buildAndroidDataOnlyMessage({ title, body, data = {} }: PushContent) {
+// Native Android push notification — data-only payload.
+// No `notification` block on Android so the FCM SDK does NOT auto-display a
+// banner. The Flutter background handler (_firebaseMessagingBackgroundHandler)
+// and the foreground onMessage listener are the sole renderers, ensuring a
+// single, correctly formatted notification on all Android versions.
+function buildAndroidMessage({ title, body, data = {} }: PushContent) {
   return {
     data: {
       title,
@@ -37,6 +34,7 @@ function buildAndroidDataOnlyMessage({ title, body, data = {} }: PushContent) {
     },
     android: {
       priority: "high" as const,
+      ttl: 86400 * 1000, // 24 hours in milliseconds
     },
   };
 }
@@ -94,7 +92,7 @@ async function sendPushToTokens({
     });
 
     const groups: Array<[Set<string>, Record<string, unknown>]> = [
-      [androidTokens, buildAndroidDataOnlyMessage({ title, body, data })],
+      [androidTokens, buildAndroidMessage({ title, body, data })],
       [otherTokens, buildDefaultMessage({ title, body, data })],
     ];
 
@@ -208,7 +206,7 @@ export const onRegistrationApproved = onDocumentUpdated(
           const title = "Registration Approved!";
           const body = `Welcome to the Guardians team, ${userName}! You now have full access to the Usher Hub.`;
           const payload = tokenDoc.data()?.platform === "android"
-            ? buildAndroidDataOnlyMessage({ title, body, data: { type: "approval" } })
+            ? buildAndroidMessage({ title, body, data: { type: "approval" } })
             : buildDefaultMessage({ title, body, data: { type: "approval" } });
           await messaging.send({ token, ...payload });
           logger.info(`Approval push sent to ${userName}`);

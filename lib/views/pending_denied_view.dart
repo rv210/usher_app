@@ -15,8 +15,6 @@ class PendingDeniedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final firebaseService = Provider.of<FirebaseService>(context, listen: false);
 
     return Scaffold(

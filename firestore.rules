@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/team/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/team/$(request.auth.uid)) &&
+         getUserData().role == 'Admin') ||
+        (request.auth.token.email != null && (
+          request.auth.token.email == 'robv88@gmail.com' ||
+          request.auth.token.email.matches('.*robert.*') ||
+          request.auth.token.email.matches('.*vargas.*') ||
+          request.auth.token.email.matches('.*matthias.*') ||
+          request.auth.token.email.matches('.*breyer.*') ||
+          request.auth.token.email.matches('.*louis.*') ||
+          request.auth.token.email.matches('.*richardson.*')
+        )) ||
+        (request.auth.token.phone_number != null && (
+          request.auth.token.phone_number.matches('.*3183449278.*')
+        ))
+      );
+    }
+
+    // Team & User Profiles (Church Directory)
+    match /team/{userId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if true;
+    }
+
+    match /ushers/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /team_members/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /roster/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Deployments / Duty Roster
+    match /deployments/{deploymentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /deployment_publishes/{deploymentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Attendance / Headcount Logs
+    match /attendance/{logId} {
+      allow read, write: if true;
+    }
+
+    match /attendance_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Comms Messaging
+    match /comms/{messageId} {
+      allow read, write: if true;
+    }
+
+    match /communications/{messageId} {
+      allow read, write: if true;
+    }
+
+    match /comms_messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Announcements & Bulletins
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // App Settings (e.g. bulletin text, live tally)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Guest Check-Ins
+    match /guest_checkins/{checkinId} {
+      allow read, write: if true;
+    }
+
+    // Push Notification Logs
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+
+    // Device FCM Push Tokens
+    match /user_tokens/{userId} {
+      allow read, write: if true;
+    }
+  }
+}

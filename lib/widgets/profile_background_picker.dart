@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/profile_background.dart';
 import '../services/firebase_service.dart';
-import '../theme/app_theme.dart';
 
 Future<void> showProfileBackgroundPickerSheet(
   BuildContext context,

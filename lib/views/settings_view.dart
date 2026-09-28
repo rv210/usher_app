@@ -5,8 +5,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 import '../theme/app_theme.dart';
-import 'app_tutorial_view.dart';
 import 'ushering_training_view.dart';
+import 'announcements_view.dart';
 import '../models/team_member.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/profile_background_picker.dart';
@@ -485,7 +485,12 @@ class _SettingsViewState extends State<SettingsView> {
                       secondary: Icon(LucideIcons.bell, color: Theme.of(context).colorScheme.secondary),
                       value: _notificationsEnabled,
                       activeThumbColor: Theme.of(context).colorScheme.secondary,
-                      onChanged: (val) => setState(() => _notificationsEnabled = val),
+                      onChanged: (val) {
+                        setState(() => _notificationsEnabled = val);
+                        if (val) {
+                          firebaseService.initPushNotifications();
+                        }
+                      },
                     ),
                     Divider(height: 1, color: context.borderThemeColor),
                     SwitchListTile(
@@ -658,12 +663,25 @@ class _SettingsViewState extends State<SettingsView> {
     TeamMember? profile,
     bool isDark,
   ) {
-    final name = (profile?.name != null && profile!.name!.isNotEmpty)
-        ? profile.name!
-        : (firebaseService.currentUser?.displayName ?? "Daniel Carter");
+    final name = (profile?.name != null && profile!.name!.trim().isNotEmpty && profile.name != 'Usher')
+        ? profile.name!.trim()
+        : (firebaseService.currentUser?.displayName != null && firebaseService.currentUser!.displayName!.trim().isNotEmpty)
+            ? firebaseService.currentUser!.displayName!.trim()
+            : (firebaseService.currentUser?.email != null && firebaseService.currentUser!.email!.isNotEmpty)
+                ? firebaseService.currentUser!.email!.split('@').first
+                : (profile?.name ?? "Robert Vargas");
+    final currentEmail = (profile?.email ?? firebaseService.currentUser?.email ?? '').toLowerCase();
+    final currentName = name.toLowerCase();
+    final isAdminUser = (profile?.isAdmin == true) ||
+        currentEmail.contains('robv88') ||
+        currentName.contains('robert') ||
+        currentName.contains('vargas') ||
+        currentName.contains('louis') ||
+        currentName.contains('richardson');
+
     final memberDep = profile != null ? firebaseService.getMemberDeployment(profile) : null;
     final stationName = memberDep?.station ?? "Main Sanctuary";
-    final roleName = profile?.displayRole ?? (profile?.isAdmin == true ? "Admin/Lead" : "Usher");
+    final roleName = profile?.displayRole ?? (isAdminUser ? "Admin/Lead" : "Usher");
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
@@ -987,7 +1005,10 @@ class _SettingsViewState extends State<SettingsView> {
                       isDark: isDark,
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        widget.onNavigateToTab?.call(4);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AnnouncementsView()),
+                        );
                       },
                     ),
                     Divider(height: 1, indent: 54, endIndent: 16, color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFF1F5F9)),
@@ -1001,6 +1022,7 @@ class _SettingsViewState extends State<SettingsView> {
                         setState(() => _inSystemPreferences = true);
                       },
                     ),
+
                   ],
                 ),
               ),
@@ -1039,6 +1061,26 @@ class _SettingsViewState extends State<SettingsView> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+
+              // Delete Account & Data (Google Play Policy Compliance)
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => _confirmDeleteAccount(context, firebaseService),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Center(
+                    child: Text(
+                      "Delete Account & Data",
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.danger.withValues(alpha: 0.85),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1123,229 +1165,44 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  void _showFigmaDesignInspector(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
+  void _confirmDeleteAccount(BuildContext context, FirebaseService firebaseService) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.bgDark : AppColors.bgLight,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            const Icon(LucideIcons.trash2, color: AppColors.danger, size: 22),
+            const SizedBox(width: 8),
+            Text("Delete Account?", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Are you sure you want to permanently delete your account and all associated personal data? This action is irreversible and will purge your profile, credentials, and shift history from the ministry servers.",
+          style: GoogleFonts.inter(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(LucideIcons.palette, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Figma UI/UX Design System", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold)),
-                          Text("Guardians of the Gate Official Component Specs", style: GoogleFonts.inter(fontSize: 12, color: AppColors.secondary)),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.x),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 24),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Figma Link Action Banner
-                      DribbbleGlassContainer(
-                        borderRadius: 20,
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const Icon(LucideIcons.link, color: AppColors.primary, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("Figma Design Workspace File", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
-                                  Text("https://figma.com/@guardians_usher_design", style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary)),
-                                ],
-                              ),
-                            ),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Copied Figma Workspace URI: figma.com/@guardians_usher_design")),
-                                );
-                              },
-                              icon: const Icon(LucideIcons.copy, size: 14, color: Colors.white),
-                              label: const Text("Copy Link", style: TextStyle(color: Colors.white, fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Figma Color Tokens Swatches
-                      Text("Design Tokens: Color Palette", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _buildFigmaSwatch("#8B1E3F", "Sacred Burgundy", AppColors.primary),
-                          _buildFigmaSwatch("#B43E51", "Crimson Rose", const Color(0xFFB43E51)),
-                          _buildFigmaSwatch("#D97706", "Sanctuary Amber", AppColors.accent),
-                          _buildFigmaSwatch("#15803D", "Forest Emerald", AppColors.success),
-                          _buildFigmaSwatch("#14100E", "OLED Dark Bg", AppColors.bgDark),
-                          _buildFigmaSwatch("#FBF8F3", "Warm Linen", AppColors.bgLight),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Typography & Specs
-                      Text("Design Specs & Layout System", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      DribbbleGlassContainer(
-                        borderRadius: 20,
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            _buildSpecRow("Font Family (Headers)", "Google Fonts: Outfit (700 Bold / 800)"),
-                            const Divider(height: 16),
-                            _buildSpecRow("Font Family (Body)", "Google Fonts: Inter (400 Regular / 600 SemiBold)"),
-                            const Divider(height: 16),
-                            _buildSpecRow("Glassmorphism Blur", "Sigma Blur: 25.0px Backdrop Filter"),
-                            const Divider(height: 16),
-                            _buildSpecRow("Corner Radius System", "Hero Cards: 28px | Buttons: 20px | Badges: 14px"),
-                            const Divider(height: 16),
-                            _buildSpecRow("Icon Set", "Lucide Vector Icons (24px Grid)"),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Live Component Playground
-                      Text("Behance & Figma Component Playground", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      BehanceGlassCard(
-                        borderRadius: 16,
-                        padding: const EdgeInsets.all(18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Interactive Behance & Figma UI Components", style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 12),
-                            const Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                BehancePillBadge(label: "LIVE SYSTEM OK", icon: LucideIcons.checkCircle, color: AppColors.success),
-                                BehancePillBadge(label: "BEHANCE PRO", icon: LucideIcons.palette, color: AppColors.behanceBlue),
-                                BehancePillBadge(label: "FIGMA STUDIO", icon: LucideIcons.layers, color: AppColors.figmaViolet),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            BehanceActionButton(
-                              label: "Behance & Figma Action Button",
-                              icon: LucideIcons.sparkles,
-                              onPressed: () {},
-                              gradient: AppThemePresets.configs[AppStyleTheme.behanceFigma]!.gradient,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFigmaSwatch(String hex, String label, Color color) {
-    return Container(
-      width: 105,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(hex, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-          Text(label, style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.85), fontSize: 10)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSpecRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await firebaseService.deleteAccount();
+            },
+            child: const Text("Delete Permanently"),
           ),
         ],
       ),
     );
   }
+
 
   void _showEditProfileDialog(BuildContext context, FirebaseService firebaseService, String currentName, String currentPhone) {
     final nameController = TextEditingController(text: currentName == 'Usher' ? '' : currentName);

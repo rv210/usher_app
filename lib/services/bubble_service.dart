@@ -15,6 +15,7 @@ class BubbleService {
     required String message,
     String? senderId,
     String? shortcutId,
+    bool autoExpand = false,
   }) async {
     if (kIsWeb) return false;
 
@@ -25,6 +26,7 @@ class BubbleService {
           'message': message,
           'senderId': senderId ?? 'team_lead',
           'shortcutId': shortcutId ?? 'comms_conversation',
+          'autoExpand': autoExpand,
         });
         debugPrint("Android Bubble Notification triggered successfully: $result");
         return result ?? true;
@@ -47,7 +49,7 @@ class BubbleService {
       if (!_fallbackInitialized) {
         await _fallbackPlugin.initialize(
           const InitializationSettings(
-            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+            android: AndroidInitializationSettings('@drawable/ic_stat_notification'),
             iOS: DarwinInitializationSettings(),
           ),
         );
@@ -65,7 +67,7 @@ class BubbleService {
             'Guardians Notifications',
             importance: Importance.max,
             priority: Priority.high,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_stat_notification',
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
